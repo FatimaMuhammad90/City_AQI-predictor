@@ -31,7 +31,7 @@ CITIES = [
 ]
 
 end_date = date.today() - timedelta(days=1)
-start_date = end_date- timedelta(days=365)
+start_date = end_date- timedelta(days=730)
 
 all_air = []
 
