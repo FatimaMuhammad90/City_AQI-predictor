@@ -1,8 +1,8 @@
 import pandas as pd
 
 # Load both datasets
-air_df = pd.read_csv("historical_air_quality_5_cities.csv")
-weather_df = pd.read_csv("historical_weather_5_cities.csv")
+air_df = pd.read_csv("../data/historical_air_quality_5_cities.csv")
+weather_df = pd.read_csv("../data/historical_weather_5_cities.csv")
 
 # Merge on timestamp and city
 combined_df = pd.merge(
