@@ -1,0 +1,14 @@
+# feast_st/feature_store.yaml
+project: aqi_prediction
+registry: data/registry.db
+
+provider: local
+
+online_store:
+    type: postgres
+    host: db.jczrxxklfkmdprztxuww.supabase.co
+    port: 5432
+    database: postgres
+    user: postgres
+    password: fatimashahzad18115
+    db_schema: public

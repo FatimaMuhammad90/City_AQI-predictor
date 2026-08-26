@@ -1,0 +1,124 @@
+
+P
+1
+cityAQI monitoring city"cityJaqi_prediction
+Ô—∫‘†Ö›SÂ√º‘¯‚À®
+D
+%
+__dummy"
+__dummy_idJaqi_prediction
+Ô—∫‘ò¢ÍUÂ√º‘»¶é©1"$8dcf051e-c369-40ac-970c-442506990f06*˜√º‘®ç˛˝2Ó
+´
+aqi_featureaqi_predictioncity"
+latitude"
+	longitude"	
+pm2_5"
+pm10"
+city_encoded"
+co"
+no2"
+so2"
+o3"
+temperature"
+humidity"
+pressure"
+
+wind_speed"
+wind_direction"
+precipitation"
+cloud_cover"
+	aqi_lag_1"
+	aqi_lag_3"
+	aqi_lag_6"
+
+aqi_lag_12"
+
+aqi_lag_24"
+aqi_rolling_mean_3h"
+aqi_rolling_mean_24h"
+aqi_rolling_min_24h"
+aqi_rolling_max_24h"
+hour"
+day"
+day_of_week"	
+month"
+hour_sin"
+hour_cos"
+
+is_weekend"
+is_rush_hour"
+aqi_diff_1h"
+aqi_diff_24h*
+purposeaqi_forecasting*
+projectaqi_prediction2Äı$:ñtimestamp_utcZdata/aqi_features.parquetä1feast.infra.offline_stores.file_source.FileSource¢aqi_features_sourceíÂ√º‘êŒ™o"Â√º‘à˝ò£@b
+cityílatestΩ
+Ô—∫‘ò¢ÍU˜√º‘∏∂∑˝
+Ä¬ØÄ∂÷Ÿ
+Ä∂÷ŸÄ∫∫‘
+Ä∂÷ŸÄ∫∫‘
+Ä∂÷Ÿê÷∫‘
+Ä∂÷Ÿê÷∫‘
+Ä∂÷Ÿê÷∫‘
+Ä∂÷Ÿê÷∫‘
+Ä∂÷Ÿê÷∫‘
+Ä∂÷ŸÄŸ∏‘
+Ä∂÷ŸÄŸ∏‘
+Ä∂÷Ÿê÷∫‘
+Äâªµê÷∫‘
+Ä∂÷Ÿê∑º‘
+Ä∂÷Ÿê∑º‘
+Ä∂÷Ÿê∑º‘
+Ä∂÷Ÿê∑º‘0R√
+¿
+,feast.infra.online_stores.sqlite.SqliteTable"è
+qC:\Users\HP\OneDrive - Higher Education Commission\MHdatabase\AQI_prediction_system\feast_st\data\online_store.dbaqi_prediction_aqi_featurebßtimestamp_utcZdata/aqi_features.parquetä1feast.infra.offline_stores.file_source.FileSource¢aqi_features_source™aqi_predictioníÓ—∫‘∞≥¡…"Ô—∫‘†Ö›Sä/
+
+aqi_prediction
+Ô—∫‘∏ãÚÂ√º‘àóˇåíÆ
+´
+aqi_featureaqi_prediction"feature_view* 
+´
+aqi_featureaqi_predictioncity"
+latitude"
+	longitude"	
+pm2_5"
+pm10"
+city_encoded"
+co"
+no2"
+so2"
+o3"
+temperature"
+humidity"
+pressure"
+
+wind_speed"
+wind_direction"
+precipitation"
+cloud_cover"
+	aqi_lag_1"
+	aqi_lag_3"
+	aqi_lag_6"
+
+aqi_lag_12"
+
+aqi_lag_24"
+aqi_rolling_mean_3h"
+aqi_rolling_mean_24h"
+aqi_rolling_min_24h"
+aqi_rolling_max_24h"
+hour"
+day"
+day_of_week"	
+month"
+hour_sin"
+hour_cos"
+
+is_weekend"
+is_rush_hour"
+aqi_diff_1h"
+aqi_diff_24h*
+projectaqi_prediction*
+purposeaqi_forecasting2Äı$:ñtimestamp_utcZdata/aqi_features.parquetä1feast.infra.offline_stores.file_source.FileSource¢aqi_features_sourceíÓ—∫‘∞≥¡…"Ô—∫‘†Ö›S@b
+cityílatest
+Ô—∫‘ò¢ÍUÔ—∫‘ò¢ÍU2Ô—∫‘–øÂVB$e3c90175-4f9d-4f59-95f1-d21797e5b3b4

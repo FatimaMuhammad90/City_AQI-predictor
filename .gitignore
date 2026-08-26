@@ -1,0 +1,6 @@
+models\xgboost_24h.pkl
+models\rf_model_72h.pkl
+models\catboost_48h.cbm
+.env
+.pycache
+.idea
