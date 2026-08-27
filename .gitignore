@@ -2,5 +2,11 @@ models\xgboost_24h.pkl
 models\rf_model_72h.pkl
 models\catboost_48h.cbm
 .env
+.venv
 .pycache
 .idea
+feast_st/data/aqi_features.parquet
+feast_st/data/registry.db
+feast_st/feature_store.yaml
+data/predictions.csv
+data/observed_aqi_history.csv

@@ -76,7 +76,6 @@ def store_predictions(city, prediction_time, predictions):
 
     return response.data
 
-
 def get_latest_predictions(city):
 
     response = (
@@ -85,7 +84,21 @@ def get_latest_predictions(city):
         .select("*")
         .eq("city", city)
         .order("prediction_time", desc=True)
-        .limit(3)
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        return None
+
+    latest_time = response.data[0]["prediction_time"]
+
+    response = (
+        supabase
+        .table("predictions")
+        .select("*")
+        .eq("city", city)
+        .eq("prediction_time", latest_time)
         .execute()
     )
 
@@ -96,30 +109,24 @@ def get_latest_predictions(city):
 
     df = pd.DataFrame(rows)
 
-    latest_time = df["prediction_time"].max()
-
-    latest = df[
-        df["prediction_time"] == latest_time
-    ]
-
     return {
         "city": city,
         "prediction_time": latest_time,
         "prediction_24h": float(
-            latest.loc[
-                latest["horizon"] == 24,
+            df.loc[
+                df["horizon"] == 24,
                 "predicted_aqi"
             ].iloc[0]
         ),
         "prediction_48h": float(
-            latest.loc[
-                latest["horizon"] == 48,
+            df.loc[
+                df["horizon"] == 48,
                 "predicted_aqi"
             ].iloc[0]
         ),
         "prediction_72h": float(
-            latest.loc[
-                latest["horizon"] == 72,
+            df.loc[
+                df["horizon"] == 72,
                 "predicted_aqi"
             ].iloc[0]
         )

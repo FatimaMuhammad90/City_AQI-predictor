@@ -4,11 +4,11 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from api_fetch import fetch_city_data
-from feature_engineering import create_aqi_features
-from inference import predict
-from prediction_store import store_predictions
-from feast_update import update_feast
+from src.api_fetch import fetch_city_data
+from src.feature_engineering import create_aqi_features
+from src.inference import predict
+from src.prediction_store import store_predictions
+from src.feast_update import update_feast
 
 
 PROJECT_ROOT = os.path.dirname(

@@ -29,30 +29,18 @@ def update_feast(features):
     try:
         old = pd.read_parquet(FEATURE_FILE)
 
-        features = pd.concat(
-            [old, features],
-            ignore_index=True
-        )
+        features = pd.concat(  [old, features],ignore_index=True)
 
     except FileNotFoundError:
         pass
 
-    features = features.drop_duplicates(
-        subset=["city", "timestamp_utc"],
-        keep="last"
-    )
-
-    features = features.sort_values(
-        ["city", "timestamp_utc"]
-    ).reset_index(drop=True)
+    features = features.drop_duplicates( subset=["city", "timestamp_utc"],keep="last")
+    features = features.sort_values(["city", "timestamp_utc"]).reset_index(drop=True)
 
     features.to_parquet(
         FEATURE_FILE,
         index=False
     )
-
-    print(f"Feature data saved: {features.shape}")
-    print(f"Latest feature time: {features['timestamp_utc'].max()}")
     print("WRITING PARQUET TO:")
     print(FEATURE_FILE)
 
