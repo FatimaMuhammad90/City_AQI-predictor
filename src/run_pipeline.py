@@ -4,7 +4,7 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.api_fetch import fetch_city_data
+from src.api_fetch import fetch_all_cities
 from src.feature_engineering import create_aqi_features
 from src.inference import predict
 from src.prediction_store import store_predictions
@@ -112,7 +112,6 @@ def prepare_features(air_df, weather_df):
         city_encoding
     )
 
-    # Only the latest row is needed for prediction
     latest_rows = (
         air_df
         .sort_values("timestamp_utc")
@@ -188,10 +187,6 @@ def run_city_prediction(city, features):
 
     predictions = predict(feature_row)
 
-    print("\n========================================")
-    print(f"{city}")
-    print(f"Prediction time: {prediction_time}")
-    print("========================================")
 
     print(
         f"24h XGBoost      : "
@@ -232,59 +227,74 @@ def main():
         "Rawalpindi"
     ]
 
-    print("\n========================================")
-    print("AQI PREDICTION PIPELINE")
-    print("Running for all cities")
-    print("========================================")
+    try:
 
-    results = []
+        print("\n[1/4] Fetching data for all cities...")
 
-    for city in cities:
+        air_df, weather_df = fetch_all_cities()
 
-        try:
-            print("\n========================================")
-            print(f"PROCESSING: {city}")
-            print("========================================")
+        print(f"\nCombined AQI data: {air_df.shape}")
+        print(f"Combined weather data: {weather_df.shape}")
 
-            print("\n[1/4] Fetching data...")
 
-            air_df, weather_df = fetch_city_data(city)
+        print("\n[2/4] Updating observed AQI history...")
 
-            print(f"AQI data: {air_df.shape}")
-            print(f"Weather data: {weather_df.shape}")
+        observed_history = update_observed_history(air_df)
 
-            print("\n[2/4] Updating observed AQI history...")
+        print("\n[3/4] Creating features...")
 
-            observed_history = update_observed_history(
-                air_df
-            )
+        features = prepare_features(observed_history,weather_df)
 
-            print("\n[3/4] Creating features...")
+        print(f"Feature dataset: {features.shape}" )
+        print("\nUpdating Feast...")
+        update_feast(features)
+        print("Feast online store updated.")
 
-            features = prepare_features(
-                observed_history,
-                weather_df
-            )
+        print("\n[4/4] Running predictions...")
 
-            update_feast(features)
+        results = []
+
+        for city in cities:
+
+            try:
+
+                result = run_city_prediction(
+                    city,
+                    features
+                )
+
+                results.append(result)
+
+            except Exception as e:
+
+                print(
+                    f"\nERROR predicting {city}: {e}"
+                )
+
+
+
+        print("\n========================================")
+        print("PIPELINE COMPLETE")
+        print("========================================")
+
+        for result in results:
 
             print(
-                f"Feature dataset: {features.shape}"
+                f"{result['city']} | "
+                f"24h: {result['prediction_24h']:.2f} | "
+                f"48h: {result['prediction_48h']:.2f} | "
+                f"72h: {result['prediction_72h']:.2f}"
             )
 
-            print("\n[4/4] Running prediction...")
+        return results
 
-            result = run_city_prediction(
-                city,
-                features
-            )
+    except Exception as e:
 
-            results.append(result)
+        print(
+            f"\nPIPELINE FAILED: {e}"
+        )
 
-        except Exception as e:
-            print(f"\nERROR processing {city}: {e}")
-
-    return results
+        return []
 
 
 if __name__ == "__main__":
