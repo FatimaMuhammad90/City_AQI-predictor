@@ -1,0 +1,41 @@
+name: Hourly AQI Pipeline
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure Feast
+        env:
+          FEAST_POSTGRES_PASSWORD: ${{ secrets.FEAST_POSTGRES_PASSWORD }}
+        run: |
+          python scripts/create_feast_config.py
+
+      - name: Run AQI pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FEAST_POSTGRES_PASSWORD: ${{ secrets.FEAST_POSTGRES_PASSWORD }}
+        run: |
+          python src/run_pipeline.py
