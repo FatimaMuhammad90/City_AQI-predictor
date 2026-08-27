@@ -1,4 +1,3 @@
-# feast_st/feature_store.yaml
 project: aqi_prediction
 registry: data/registry.db
 
@@ -11,4 +10,4 @@ online_store:
     database: postgres
     user: postgres.jczrxxklfkmdprztxuww
     db_schema: public
-    password: fatimashahzad18115
+    password: __FEAST_PASSWORD__

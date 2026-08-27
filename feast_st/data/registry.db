@@ -1,14 +1,14 @@
 
-P
+O
 1
-cityAQI monitoring city"cityJaqi_prediction
-ïÑºÔ …İSåÃ¼ÔøâË¨
-D
+cityAQI monitoring city"cityJaqi_prediction
+ïÑºÔ …İS‘õ¼ÔØô¤x
+C
 %
 __dummy"
-__dummy_idJaqi_prediction
-ïÑºÔ˜¢êUåÃ¼ÔÈ¦©1"$8dcf051e-c369-40ac-970c-442506990f06*÷Ã¼Ô¨şı2î
-«
+__dummy_idJaqi_prediction
+ïÑºÔ˜¢êU‘õ¼ÔØô¤x1"$a88e9713-b273-4b69-8142-1d37248bf83c*ğõ¼Ô˜®Ä„2ÿ
+ª
 aqi_featureaqi_predictioncity"
 latitude"
 	longitude"	
@@ -50,9 +50,9 @@ is_weekend"
 aqi_diff_1h"
 aqi_diff_24h*
 purposeaqi_forecasting*
-projectaqi_prediction2€õ$:–timestamp_utcZdata/aqi_features.parquetŠ1feast.infra.offline_stores.file_source.FileSource¢aqi_features_source’åÃ¼ÔÎªo"åÃ¼Ôˆı˜£@b
-city’latest½
-ïÑºÔ˜¢êU÷Ã¼Ô¸¶·ı
+projectaqi_prediction2€õ$:•timestamp_utcZdata/aqi_features.parquetŠ1feast.infra.offline_stores.file_source.FileSource¢aqi_features_source’‘õ¼Ô •©+"‘õ¼ÔÀÕÃr@b
+city’latestÏ
+ïÑºÔ˜¢êUğõ¼ÔàÉƒ
 €Â¯ğ€¶ÖÙ
 €¶ÖÙ€ººÔ
 €¶ÖÙ€ººÔ
@@ -68,13 +68,14 @@ is_weekend"
 €¶ÖÙ·¼Ô
 €¶ÖÙ·¼Ô
 €¶ÖÙ·¼Ô
-€¶ÖÙ·¼Ô0RÃ
+€¶ÖÙ·¼Ô
+€¶ÖÙ Ó¼Ô0RÃ
 À
 ,feast.infra.online_stores.sqlite.SqliteTable"
-qC:\Users\HP\OneDrive - Higher Education Commission\MHdatabase\AQI_prediction_system\feast_st\data\online_store.dbaqi_prediction_aqi_featureb§timestamp_utcZdata/aqi_features.parquetŠ1feast.infra.offline_stores.file_source.FileSource¢aqi_features_sourceªaqi_prediction’îÑºÔ°³ÁÉ"ïÑºÔ …İSŠ/
+qC:\Users\HP\OneDrive - Higher Education Commission\MHdatabase\AQI_prediction_system\feast_st\data\online_store.dbaqi_prediction_aqi_featureb§timestamp_utcZdata/aqi_features.parquetŠ1feast.infra.offline_stores.file_source.FileSource¢aqi_features_sourceªaqi_prediction’îÑºÔ°³ÁÉ"ïÑºÔ …İSŠ.
 
-aqi_prediction
-ïÑºÔ¸‹òåÃ¼Ôˆ—ÿŒ’®
+aqi_prediction
+ïÑºÔ¸‹ò‘õ¼ÔÀÚàL’®
 «
 aqi_featureaqi_prediction"feature_view*Ê
 «
