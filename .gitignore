@@ -9,4 +9,3 @@ feast_st/data/aqi_features.parquet
 feast_st/data/registry.db
 feast_st/feature_store.yaml
 data/predictions.csv
-data/observed_aqi_history.csv
