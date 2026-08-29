@@ -3,24 +3,39 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
 
-def preprocess_data(filepath=None, target_column="target_24h"):
-    if filepath is None:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        filepath = os.path.join(
-            current_dir, "..", "data", "combined_air_weather_5_cities_features.csv")
+def preprocess_data(df=None, filepath=None, target_column="target_24h"):
+    # --------------------------------------------------------
+    # Handle Input Source
+    # --------------------------------------------------------
+    if df is None:
+        if filepath is None:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            filepath = os.path.join(
+                current_dir, "..", "data", "combined_air_weather_5_cities_features.csv"
+            )
+        df = pd.read_csv(filepath)
+    else:
+        df = df.copy()
 
-    df = pd.read_csv(filepath)
-    df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"])
+    # --------------------------------------------------------
+    # Map Horizon (e.g., 24 -> "target_24h")
+    # --------------------------------------------------------
+    if isinstance(target_column, int):
+        target_column = f"target_{target_column}h"
+
+    valid_targets = ["target_24h", "target_48h", "target_72h"]
+    if target_column not in valid_targets:
+        raise ValueError(f"target_column must be one of {valid_targets} or [24, 48, 72]")
+
+    # Ensure timestamp parsing and ordering
+    df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], utc=True)
     df = df.sort_values(["city", "timestamp_utc"]).reset_index(drop=True)
 
+    # Compute target shifted columns
     df["target_24h"] = df.groupby("city")["us_aqi"].shift(-24)
     df["target_48h"] = df.groupby("city")["us_aqi"].shift(-48)
     df["target_72h"] = df.groupby("city")["us_aqi"].shift(-72)
 
-    valid_targets = ["target_24h", "target_48h", "target_72h"]
-
-    if target_column not in valid_targets:
-        raise ValueError(f"target_column must be one of {valid_targets}")
     df["day"] = df["timestamp_utc"].dt.day
     df["day_of_week"] = df["timestamp_utc"].dt.dayofweek
     df["month"] = df["timestamp_utc"].dt.month
@@ -30,7 +45,7 @@ def preprocess_data(filepath=None, target_column="target_24h"):
 
     df = df.dropna(subset=[target_column]).reset_index(drop=True)
 
-    unique_times = df['timestamp_utc'].unique()
+    unique_times = df["timestamp_utc"].unique()
     split_idx = int(len(unique_times) * 0.8)
     split_time = unique_times[split_idx]
 
@@ -44,10 +59,19 @@ def preprocess_data(filepath=None, target_column="target_24h"):
         "target_48h",
         "target_72h",
         "timestamp_utc",
+        "created_at",
+        "id"
     ]
 
-    X_train = train.drop(columns=columns_to_remove)
-    X_test = test.drop(columns=columns_to_remove)
+    # Remove targets and explicitly defined columns first
+    X_train_raw = train.drop(columns=[col for col in columns_to_remove if col in train.columns])
+    X_test_raw = test.drop(columns=[col for col in columns_to_remove if col in test.columns])
+
+    # --------------------------------------------------------
+    # SAFEGUARD: Keep ONLY numeric columns for ML training
+    # --------------------------------------------------------
+    X_train = X_train_raw.select_dtypes(include=["number", "bool"])
+    X_test = X_test_raw.select_dtypes(include=["number", "bool"])
 
     y_train = train[target_column]
     y_test = test[target_column]
@@ -65,5 +89,5 @@ def preprocess_data(filepath=None, target_column="target_24h"):
         test,
         df,
         test_cities,
-        test_origins
+        test_origins,
     )

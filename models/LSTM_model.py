@@ -70,9 +70,7 @@ def evaluate_predictions(data, predictions, horizon):
     )
 
     lstm_mae = mean_absolute_error(actual,predictions)
-
     lstm_rmse = np.sqrt(mean_squared_error(actual,predictions))
-
     improvement = ((baseline_mae - lstm_mae)/ baseline_mae) * 100
 
     print("\n" + "=" * 60)
@@ -176,24 +174,48 @@ def evaluate_predictions(data, predictions, horizon):
         "baseline_rmse": baseline_rmse,
         "city_results": city_results
     }
+def prepare_lstm_data(
+    df=None,
+    filepath=None,
+    target_column="target_24h",
+    sequence_length=24,
+    test_size=0.2,
+):
+    # --------------------------------------------------------
+    # 1. Input source check
+    # --------------------------------------------------------
+    if df is None:
+        if filepath is None:
+            raise ValueError("Either df or filepath must be provided")
+        df = pd.read_csv(filepath)
+    else:
+        df = df.copy()
 
+    # --------------------------------------------------------
+    # 2. Map integer horizon to column name (e.g., 24 -> "target_24h")
+    # --------------------------------------------------------
+    if isinstance(target_column, int):
+        target_column = f"target_{target_column}h"
 
-def prepare_lstm_data(filepath, target_column, sequence_length=24, test_size=0.2):
+    valid_targets = ["target_24h", "target_48h", "target_72h"]
+    if target_column not in valid_targets:
+        raise ValueError(f"target_column must be one of {valid_targets} or [24, 48, 72]")
 
-    df = pd.read_csv(filepath)
-    df = df[df["city"] != "Karachi"].copy()
-    df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"])
+    # --------------------------------------------------------
+    # 3. Ensure target columns exist in raw df
+    # --------------------------------------------------------
+    df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], utc=True)
     df = df.sort_values(["city", "timestamp_utc"]).reset_index(drop=True)
 
-    print(f"\nOriginal data shape: {df.shape}")
-    print(f"Time range: {df['timestamp_utc'].min()} to {df['timestamp_utc'].max()}")
-    df["target_24h"] = df.groupby("city")["us_aqi"].shift(-24)
-    df["target_48h"] = df.groupby("city")["us_aqi"].shift(-48)
-    df["target_72h"] = df.groupby("city")["us_aqi"].shift(-72)
+    if target_column not in df.columns:
+        df["target_24h"] = df.groupby("city")["us_aqi"].shift(-24)
+        df["target_48h"] = df.groupby("city")["us_aqi"].shift(-48)
+        df["target_72h"] = df.groupby("city")["us_aqi"].shift(-72)
 
+    # --------------------------------------------------------
+    # 4. Drop missing targets
+    # --------------------------------------------------------
     df = df.dropna(subset=[target_column]).reset_index(drop=True)
-    print(f"After removing rows without {target_column}: {df.shape}")
-
 
     encoder = LabelEncoder()
     df["city_encoded"] = encoder.fit_transform(df["city"])
@@ -204,10 +226,16 @@ def prepare_lstm_data(filepath, target_column, sequence_length=24, test_size=0.2
         "us_aqi",
         "target_24h",
         "target_48h",
-        "target_72h"
+        "target_72h",
+        "created_at",
+        "id"
     ]
 
-    feature_columns = [col for col in df.columns if col not in exclude_columns]
+    # Select only numeric/boolean features to prevent string conversion errors
+    candidate_cols = [col for col in df.columns if col not in exclude_columns]
+    numeric_df = df[candidate_cols].select_dtypes(include=["number", "bool"])
+    feature_columns = list(numeric_df.columns)
+
     print(f"Number of features: {len(feature_columns)}")
 
     X_sequences = []
@@ -293,7 +321,6 @@ def prepare_lstm_data(filepath, target_column, sequence_length=24, test_size=0.2
     assert (test_origins >= cutoff_time).all(), "ERROR: Some test origins are before cutoff!"
     assert (origin_times[train_mask] < cutoff_time).all(), "ERROR: Some train origins are after cutoff!"
     print("✓ Data integrity check passed - no leakage detected")
-
 
     return {
         "X_train": X_train,

@@ -11,3 +11,6 @@ joblib
 xgboost
 catboost
 scikit-learn
+tensorflow
+keras
+numpy
