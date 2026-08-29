@@ -1,4 +1,4 @@
-name: Hourly AQI Pipeline
+name: Hourly_AQI_Pipeline
 
 on:
   schedule:

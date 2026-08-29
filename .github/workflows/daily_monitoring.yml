@@ -1,4 +1,4 @@
-name: Daily AQI Monitoring
+name: Daily_AQI_Monitoring
 
 on:
   schedule:
