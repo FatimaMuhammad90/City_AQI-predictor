@@ -14,3 +14,4 @@ scikit-learn
 tensorflow
 keras
 numpy
+shap

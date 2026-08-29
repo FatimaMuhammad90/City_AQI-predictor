@@ -295,11 +295,6 @@ def prepare_lstm_data(
     test_targets = target_times[test_mask]
     test_cities = city_names[test_mask]
 
-    print(f"\nTraining sequences: {len(X_train)}")
-    print(f"Test sequences: {len(X_test)}")
-    print(f"Training origin range: {origin_times[train_mask][0]} to {origin_times[train_mask][-1]}")
-    print(f"Test origin range: {test_origins[0]} to {test_origins[-1]}")
-
     scaler = StandardScaler()
     n_train_samples = X_train.shape[0]
     n_test_samples = X_test.shape[0]
@@ -320,7 +315,7 @@ def prepare_lstm_data(
 
     assert (test_origins >= cutoff_time).all(), "ERROR: Some test origins are before cutoff!"
     assert (origin_times[train_mask] < cutoff_time).all(), "ERROR: Some train origins are after cutoff!"
-    print("✓ Data integrity check passed - no leakage detected")
+    print("Data integrity check passed - no leakage detected")
 
     return {
         "X_train": X_train,
@@ -387,11 +382,6 @@ def train_lstm_model(data, lstm_units=64, dropout_rate=0.2, epochs=50, batch_siz
 
 
 if __name__ == "__main__":
-
-    print("=" * 60)
-    print("LSTM TIME SERIES FORECASTING")
-    print("=" * 60)
-
     filepath = "../data/combined_air_weather_5_cities_features.csv"
     horizons = ["target_24h", "target_48h", "target_72h"]
     results = {}
@@ -430,5 +420,3 @@ if __name__ == "__main__":
     for target in horizons:
         print(
             f"{target:<15} {results[target]['mae']:<15.4f} {results[target]['rmse']:<15.4f} {results[target]['r2']:<15.4f}")
-
-    print("\nDone!")

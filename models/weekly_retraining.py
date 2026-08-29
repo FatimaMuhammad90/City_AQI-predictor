@@ -114,12 +114,8 @@ def train_ml_for_horizon(historical_df, horizon):
     }
 
 def train_lstm_for_horizon(historical_df, horizon):
-    print("\n" + "=" * 60)
     print(f"LSTM RETRAINING — {horizon}")
-    print("=" * 60)
-
-    # IMPORTANT:
-    # LSTM receives RAW historical data.
+    # LSTM receives raw historical data.
     # It performs its own target generation, sequence generation, split, scaling.
     lstm_data = prepare_lstm_data(
         df=historical_df,
@@ -178,7 +174,7 @@ def save_winner(winner, horizon):
     hf_token = os.getenv("HF_TOKEN")
 
     if not hf_token:
-        print("⚠️ Warning: HF_TOKEN not found in environment. Upload will likely fail.")
+        print("Warning: HF_TOKEN not found in environment. Upload will likely fail.")
 
     # Authenticate the API instance directly
     api = HfApi(token=hf_token)

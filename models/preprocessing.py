@@ -4,9 +4,6 @@ from sklearn.preprocessing import LabelEncoder
 
 
 def preprocess_data(df=None, filepath=None, target_column="target_24h"):
-    # --------------------------------------------------------
-    # Handle Input Source
-    # --------------------------------------------------------
     if df is None:
         if filepath is None:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,9 +14,7 @@ def preprocess_data(df=None, filepath=None, target_column="target_24h"):
     else:
         df = df.copy()
 
-    # --------------------------------------------------------
     # Map Horizon (e.g., 24 -> "target_24h")
-    # --------------------------------------------------------
     if isinstance(target_column, int):
         target_column = f"target_{target_column}h"
 
@@ -67,9 +62,7 @@ def preprocess_data(df=None, filepath=None, target_column="target_24h"):
     X_train_raw = train.drop(columns=[col for col in columns_to_remove if col in train.columns])
     X_test_raw = test.drop(columns=[col for col in columns_to_remove if col in test.columns])
 
-    # --------------------------------------------------------
-    # SAFEGUARD: Keep ONLY numeric columns for ML training
-    # --------------------------------------------------------
+    #Keep numeric columns for ML training
     X_train = X_train_raw.select_dtypes(include=["number", "bool"])
     X_test = X_test_raw.select_dtypes(include=["number", "bool"])
 
@@ -79,9 +72,7 @@ def preprocess_data(df=None, filepath=None, target_column="target_24h"):
     test_cities = test["city"].values
     test_origins = test["timestamp_utc"].values
 
-    return (
-        X_train,
-        X_test,
+    return (X_train, X_test,
         y_train,
         y_test,
         encoder,
