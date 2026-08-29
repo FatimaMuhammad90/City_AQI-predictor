@@ -2,15 +2,15 @@ import os
 import time
 from datetime import datetime
 from huggingface_hub import HfApi
-from preprocessing import preprocess_data
+from models.preprocessing import preprocess_data
 import joblib
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from supabase_data import get_flagged_horizons, get_historical_data
-from train_ML_models import select_best_ml_model, train_ml_models
-from LSTM_model import prepare_lstm_data, train_lstm_model
-from feature_engineering import create_features
+from models.supabase_data import get_flagged_horizons, get_historical_data
+from models.train_ML_models import select_best_ml_model, train_ml_models
+from models.LSTM_model import prepare_lstm_data, train_lstm_model
+from models.feature_engineering import create_features
 
 HORIZONS = [24, 48 , 72]
 
