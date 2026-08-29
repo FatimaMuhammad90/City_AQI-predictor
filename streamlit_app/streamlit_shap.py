@@ -4,18 +4,25 @@ import os
 import joblib
 import shap
 import pandas as pd
-import streamlit as st
-
+import os
+import sys
+from pathlib import Path
 from catboost import CatBoostRegressor
 from huggingface_hub import hf_hub_download
-
-from models.preprocessing import preprocess_data
-from models.supabase_data import get_historical_data
-
+import streamlit as st
 
 REPO_ID = "flork-18115/AQI_prediciton_models"
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 
+os.environ["SUPABASE_URL"] = st.secrets["SUPABASE_URL"]
+os.environ["SUPABASE_KEY"] = st.secrets["SUPABASE_KEY"]
+
+
+# Now import modules that use os.getenv()
+from models.preprocessing import preprocess_data
+from models.supabase_data import get_historical_data
 @st.cache_data
 def load_historical_data():
     return get_historical_data()
