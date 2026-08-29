@@ -2,8 +2,8 @@ import os
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
-from streamlit_app.streamlit_pred import get_latest_predictions
-from streamlit_app.streamlit_shap import show_shap_analysis
+from streamlit_pred import get_latest_predictions
+from streamlit_shap import show_shap_analysis
 
 st.set_page_config(page_title="AQI Prediction System", layout="wide")
 
