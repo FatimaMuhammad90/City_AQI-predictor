@@ -7,7 +7,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from models.supabase_data import get_flagged_horizons, get_historical_data
+from models.supabase_data import get_flagged_horizons, get_historical_data, delete_monitoring_entry
 from models.train_ML_models import select_best_ml_model, train_ml_models
 from models.LSTM_model import prepare_lstm_data, train_lstm_model
 from models.feature_engineering import create_features
@@ -152,7 +152,7 @@ def train_lstm_for_horizon(historical_df, horizon):
 def save_winner(winner, horizon):
     os.makedirs("../models/retrained", exist_ok=True)
     model_name = winner["name"]
-
+    upload_successful = False
     current_date = datetime.now().strftime("%Y-%m-%d")
 
     if model_name == "LSTM":
@@ -189,6 +189,7 @@ def save_winner(winner, horizon):
             print(f"Uploading {filename} to {repo_id} (Attempt {attempt}/{max_retries})...")
             api.upload_file(path_or_fileobj=path, path_in_repo=filename, repo_id=repo_id,repo_type="model", commit_message=f"Automated upload for {horizon}h horizon. Best model: {model_name} (MAE: {winner.get('MAE', 'N/A'):.4f})")
             print("Upload successful!")
+            upload_successful = True
             break
 
         except Exception as e:
@@ -198,6 +199,8 @@ def save_winner(winner, horizon):
                 time.sleep(5)
             else:
                 print("Failed to upload after multiple attempts. Moving on.")
+    if upload_successful:
+        delete_monitoring_entry(horizon=horizon)
 
     return path
 

@@ -244,3 +244,14 @@ def get_historical_data():
     )
 
     return df
+
+def delete_monitoring_entry(horizon=None):
+    try:
+        if horizon is not None:
+            response = (supabase.table("monitoring").delete().eq("flagged", True).eq("horizon", horizon).execute())
+            print(f" Successfully deleted flagged monitoring entry for horizon {horizon}h!")
+        else:
+            response = (supabase.table("monitoring").delete().eq("flagged", True).execute())
+            print("Successfully deleted all flagged monitoring entries!")
+    except Exception as e:
+        print(f"Failed to delete monitoring entry: {e}")
