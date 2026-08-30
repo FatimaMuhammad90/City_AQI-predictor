@@ -247,42 +247,9 @@ if (
 
 
     with right:
-
-        st.markdown(
-            f"""
-            <div style="
-                text-align:right;
-            ">
-
-                <div style="
-                    font-size:16px;
-                    color:#777;
-                ">
-                    Prediction generated
-                </div>
-
-                <div style="
-                    font-size:28px;
-                    font-weight:700;
-                ">
-                    {prediction_time.strftime(
-                        '%d %b %Y'
-                    )}
-                </div>
-
-                <div style="
-                    font-size:24px;
-                    font-weight:600;
-                ">
-                    {prediction_time.strftime(
-                        '%I:%M %p PKT'
-                    )}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.caption("Prediction generated")
+        st.write(prediction_time.strftime("%d %b %Y"))
+        st.write(prediction_time.strftime("%I:%M %p PKT"))
 
 
     st.divider()
@@ -296,72 +263,28 @@ if (
         st.columns(3)
     )
 
+    col1, col2, col3 = st.columns(3)
 
-    forecasts = [
-        (
-            col1,
+    with col1:
+        st.metric(
             "Next 24 Hours",
-            aqi_24,
-        ),
-        (
-            col2,
-            "Next 48 Hours",
-            aqi_48,
-        ),
-        (
-            col3,
-            "Next 72 Hours",
-            aqi_72,
-        ),
-    ]
-
-
-    for col, horizon, aqi in forecasts:
-
-        status, color = (
-            get_aqi_status(aqi)
+            f"{aqi_24:.2f}",
+            get_aqi_status(aqi_24)[0]
         )
 
-        with col:
+    with col2:
+        st.metric(
+            "Next 48 Hours",
+            f"{aqi_48:.2f}",
+            get_aqi_status(aqi_48)[0]
+        )
 
-            st.markdown(
-                f"""
-                <div style="
-                    text-align:center;
-                    padding:20px;
-                    border-radius:10px;
-                    border:1px solid #ddd;
-                ">
-
-                    <div style="
-                        font-size:18px;
-                        margin-bottom:8px;
-                    ">
-                        {horizon}
-                    </div>
-
-                    <div style="
-                        font-size:42px;
-                        font-weight:700;
-                        margin-bottom:10px;
-                    ">
-                        {aqi:.2f}
-                    </div>
-
-                    <div style="
-                        background-color:{color};
-                        color:white;
-                        padding:8px;
-                        border-radius:6px;
-                        font-weight:600;
-                    ">
-                        {status}
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    with col3:
+        st.metric(
+            "Next 72 Hours",
+            f"{aqi_72:.2f}",
+            get_aqi_status(aqi_72)[0]
+        )
 
 
     # ========================================================

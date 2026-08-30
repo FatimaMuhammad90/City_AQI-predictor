@@ -286,283 +286,103 @@ def align_features(X_test, model, model_type):
 # ============================================================
 
 @st.cache_data
-def calculate_shap(
-    target_column,
-    max_samples=1500,
-):
+def calculate_shap(target_column, city):
 
-    # ========================================================
-    # LOAD MODEL
-    # ========================================================
-
+    # Load model
     if target_column == "target_24h":
-
-        model = load_model(
-            "xgboost_24h.pkl",
-            "xgboost",
-        )
-
+        model = load_model("xgboost_24h.pkl", "xgboost")
         model_type = "xgboost"
 
     elif target_column == "target_48h":
-
-        model = load_model(
-            "catboost_48h.cbm",
-            "catboost",
-        )
-
+        model = load_model("catboost_48h.cbm", "catboost")
         model_type = "catboost"
 
-    elif target_column == "target_72h":
-
-        model = load_model(
-            "rf_model_72h.pkl",
-            "random_forest",
-        )
-
+    else:
+        model = load_model("rf_model_72h.pkl", "random_forest")
         model_type = "random_forest"
 
-    else:
+    # Prepare data
+    X_test, test_cities = prepare_shap_data(target_column)
 
-        raise ValueError(
-            f"Unknown target column: "
-            f"{target_column}"
-        )
+    X_test = X_test.copy()
 
+    X_test = X_test.select_dtypes(
+        include=["number", "bool"]
+    ).astype(float)
 
-    # ========================================================
-    # PREPARE DATA
-    # ========================================================
+    test_cities = pd.Series(test_cities).reset_index(drop=True)
 
-    X_test, test_cities = (
-        prepare_shap_data(
-            target_column
-        )
-    )
+    # --------------------------------------------------------
+    # FILTER CITY BEFORE SHAP
+    # --------------------------------------------------------
 
+    city_mask = (test_cities == city).values
 
-    # ========================================================
-    # ALIGN FEATURES
-    # ========================================================
+    X_city = X_test.loc[city_mask].copy()
 
-    X_test = align_features(
-        X_test,
-        model,
-        model_type,
-    )
-
-
-    # ========================================================
+    # --------------------------------------------------------
     # SAMPLE DATA
-    # ========================================================
-    #
-    # SHAP over 17,000+ observations is unnecessarily slow.
-    #
-    # We only need a representative sample to determine
-    # feature importance.
-    #
-    # This makes Streamlit dramatically faster.
-    # ========================================================
+    # --------------------------------------------------------
 
-    if len(X_test) > max_samples:
-
-        sample_indices = (
-            X_test.sample(
-                n=max_samples,
-                random_state=42,
-            ).index
+    if len(X_city) > SHAP_SAMPLE_SIZE:
+        X_city = X_city.sample(
+            n=SHAP_SAMPLE_SIZE,
+            random_state=42
         )
 
-        X_test = (
-            X_test.loc[
-                sample_indices
-            ]
-            .sort_index()
-            .reset_index(drop=True)
-        )
-
-        test_cities = (
-            test_cities.loc[
-                sample_indices
-            ]
-            .reset_index(drop=True)
-        )
-
-    else:
-
-        X_test = (
-            X_test
-            .reset_index(drop=True)
-        )
-
-        test_cities = (
-            test_cities
-            .reset_index(drop=True)
-        )
-
-
-    X_test = X_test.astype(float)
-
-
-    # ========================================================
-    # DEBUG
-    # ========================================================
-
-    st.write(
-        f"SHAP model: {target_column}"
-    )
-
-    st.write(
-        f"SHAP dataset: "
-        f"{X_test.shape[0]:,} observations × "
-        f"{X_test.shape[1]} features"
-    )
-
-
-    # ========================================================
-    # XGBOOST
-    # ========================================================
+    # --------------------------------------------------------
+    # SHAP
+    # --------------------------------------------------------
 
     if model_type == "xgboost":
 
-        try:
+        expected_features = model.n_features_in_
 
-            explainer = shap.TreeExplainer(
-                model
+        if expected_features != X_city.shape[1]:
+            raise ValueError(
+                f"Feature mismatch for {target_column}: "
+                f"model expects {expected_features} features, "
+                f"but X_test has {X_city.shape[1]}."
             )
 
-            shap_values = (
-                explainer.shap_values(
-                    X_test
-                )
-            )
+        explainer = shap.TreeExplainer(model)
 
-        except Exception as e:
-
-            raise RuntimeError(
-                "XGBoost SHAP calculation "
-                "failed. This is usually caused "
-                "by an incompatibility between "
-                "the installed SHAP and XGBoost "
-                "versions, or by a model trained "
-                "with a different feature layout.\n\n"
-                f"Original error: {e}"
-            )
-
-
-    # ========================================================
-    # RANDOM FOREST
-    # ========================================================
+        shap_values = explainer.shap_values(X_city)
 
     elif model_type == "random_forest":
 
-        explainer = shap.TreeExplainer(
-            model
-        )
+        expected_features = model.n_features_in_
 
-        shap_values = (
-            explainer.shap_values(
-                X_test
+        if expected_features != X_city.shape[1]:
+            raise ValueError(
+                f"Feature mismatch for {target_column}: "
+                f"model expects {expected_features} features, "
+                f"but X_test has {X_city.shape[1]}."
             )
-        )
 
+        explainer = shap.TreeExplainer(model)
 
-    # ========================================================
-    # CATBOOST
-    # ========================================================
+        shap_values = explainer.shap_values(X_city)
 
-    elif model_type == "catboost":
+    else:
 
-        feature_names = (
-            list(X_test.columns)
-        )
+        feature_names = list(X_city.columns)
 
-        # ----------------------------------------------------
-        # Important:
-        #
-        # Do NOT call model.set_feature_names()
-        # because the loaded model already has its own
-        # feature structure.
-        #
-        # Instead, supply names to the Pool.
-        # ----------------------------------------------------
+        model.set_feature_names(feature_names)
 
         test_pool = Pool(
-            X_test,
-            feature_names=feature_names,
+            X_city,
+            feature_names=feature_names
         )
 
-        shap_result = (
-            model.get_feature_importance(
-                data=test_pool,
-                type="ShapValues",
-            )
+        shap_result = model.get_feature_importance(
+            data=test_pool,
+            type="ShapValues"
         )
 
-        # Last column = expected/base value
-        shap_values = (
-            shap_result[:, :-1]
-        )
+        shap_values = shap_result[:, :-1]
 
-
-    # ========================================================
-    # NORMALIZE SHAP OUTPUT
-    # ========================================================
-
-    # Some SHAP versions return a list
-    # for certain model types.
-
-    if isinstance(
-        shap_values,
-        list
-    ):
-
-        shap_values = (
-            shap_values[0]
-        )
-
-    shap_values = (
-        pd.DataFrame(
-            shap_values
-        ).to_numpy()
-    )
-
-
-    # ========================================================
-    # FINAL SHAPE CHECK
-    # ========================================================
-
-    if (
-        shap_values.shape[0]
-        != X_test.shape[0]
-    ):
-
-        raise ValueError(
-            "SHAP output row count does "
-            "not match X_test.\n"
-            f"X_test: {X_test.shape}\n"
-            f"SHAP: {shap_values.shape}"
-        )
-
-    if (
-        shap_values.shape[1]
-        != X_test.shape[1]
-    ):
-
-        raise ValueError(
-            "SHAP output feature count "
-            "does not match X_test.\n"
-            f"X_test: {X_test.shape}\n"
-            f"SHAP: {shap_values.shape}"
-        )
-
-
-    return (
-        X_test,
-        test_cities,
-        shap_values,
-    )
-
+    return X_city, shap_values
 
 # ============================================================
 # DISPLAY SHAP ANALYSIS
