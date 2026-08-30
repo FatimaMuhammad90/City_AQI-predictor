@@ -72,9 +72,13 @@ def calculate_shap(model_name, target_column):
         model = load_model("rf_model_72h.pkl", "random_forest")
 
     X_test, test_cities = prepare_shap_data(target_column)
+
+    st.write("MODEL FEATURES:", model.n_features_in_)
+    st.write("X_TEST SHAPE:", X_test.shape)
+    st.write("X_TEST COLUMNS:", list(X_test.columns))
+
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_test)
-
     return X_test, test_cities, shap_values
 
 
