@@ -13,9 +13,7 @@ from streamlit_pred import (
     get_hourly_backfill_status,
 )
 
-from streamlit_shap import (
-    show_shap_analysis,
-)
+from streamlit_shap import show_shap_analysis
 
 
 # ============================================================
@@ -96,9 +94,7 @@ def get_aqi_status(aqi):
 # TITLE
 # ============================================================
 
-st.title(
-    "AQI Prediction System"
-)
+st.title("AQI Prediction System")
 
 st.write(
     "Air quality forecast for the next "
@@ -112,8 +108,7 @@ st.divider()
 # CITY
 # ============================================================
 
-city = st.selectbox(
-    "Select city",
+city = st.selectbox( "Select city",
     CITIES,
     key="selected_city",
 )
@@ -338,8 +333,7 @@ if st.session_state[
     st.line_chart(
         chart_data.set_index(
             "Forecast Horizon"
-        ),
-        use_container_width=True,
+        )
     )
 
     # ========================================================
