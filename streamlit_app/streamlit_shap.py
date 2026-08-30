@@ -46,7 +46,6 @@ def load_model(filename, model_type):
 def prepare_shap_data(target_column):
     historical_df = load_historical_data()
 
-    # Apply the exact same feature engineering used during training
     featured_df = create_features(historical_df)
 
     X_train, X_test, y_train, y_test, encoder, train, test, df_processed, test_cities, test_origins = preprocess_data(
@@ -54,12 +53,12 @@ def prepare_shap_data(target_column):
         target_column=target_column)
     return X_test, test_cities
 
-@st.cache_data
-def prepare_shap_data(target_column):
-    historical_df = load_historical_data()
-    X_train, X_test, y_train, y_test, encoder, train, test, df_processed, test_cities, test_origins = preprocess_data(df=historical_df, target_column=target_column)
-
-    return X_test, test_cities
+# @st.cache_data
+# def prepare_shap_data(target_column):
+#     historical_df = load_historical_data()
+#     X_train, X_test, y_train, y_test, encoder, train, test, df_processed, test_cities, test_origins = preprocess_data(df=historical_df, target_column=target_column)
+#
+#     return X_test, test_cities
 
 
 @st.cache_data
@@ -72,10 +71,15 @@ def calculate_shap(model_name, target_column):
         model = load_model("rf_model_72h.pkl", "random_forest")
 
     X_test, test_cities = prepare_shap_data(target_column)
-
     st.write("MODEL FEATURES:", model.n_features_in_)
     st.write("X_TEST SHAPE:", X_test.shape)
     st.write("X_TEST COLUMNS:", list(X_test.columns))
+
+    if model.n_features_in_ != X_test.shape[1]:
+        raise ValueError(
+            f"FEATURE MISMATCH: model expects {model.n_features_in_} features "
+            f"but X_test contains {X_test.shape[1]} features."
+        )
 
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_test)
