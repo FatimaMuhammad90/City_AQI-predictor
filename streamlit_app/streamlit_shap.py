@@ -11,6 +11,7 @@ from catboost import CatBoostRegressor
 from huggingface_hub import hf_hub_download
 import streamlit as st
 
+
 REPO_ID = "flork-18115/AQI_prediciton_models"
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -18,11 +19,13 @@ sys.path.insert(0, str(ROOT_DIR))
 
 os.environ["SUPABASE_URL"] = st.secrets["SUPABASE_URL"]
 os.environ["SUPABASE_KEY"] = st.secrets["SUPABASE_KEY"]
-
-
-# Now import modules that use os.getenv()
+# important to import it
 from models.preprocessing import preprocess_data
 from models.supabase_data import get_historical_data
+from models.feature_engineering import create_features
+
+
+
 @st.cache_data
 def load_historical_data():
     return get_historical_data()
@@ -39,6 +42,17 @@ def load_model(filename, model_type):
 
     return joblib.load(model_path)
 
+@st.cache_data
+def prepare_shap_data(target_column):
+    historical_df = load_historical_data()
+
+    # Apply the exact same feature engineering used during training
+    featured_df = create_features(historical_df)
+
+    X_train, X_test, y_train, y_test, encoder, train, test, df_processed, test_cities, test_origins = preprocess_data(
+        df=featured_df,
+        target_column=target_column)
+    return X_test, test_cities
 
 @st.cache_data
 def prepare_shap_data(target_column):
