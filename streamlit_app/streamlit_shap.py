@@ -1,18 +1,15 @@
 import os
 import sys
 from pathlib import Path
-
-import joblib
-import pandas as pd
 import shap
-import streamlit as st
 import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
 
-from catboost import CatBoostRegressor, Pool
-from huggingface_hub import hf_hub_download
 
-
-REPO_ID = "flork-18115/AQI_prediciton_models"
+# ============================================================
+# PROJECT PATH
+# ============================================================
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,227 +25,45 @@ os.environ["SUPABASE_URL"] = st.secrets["SUPABASE_URL"]
 os.environ["SUPABASE_KEY"] = st.secrets["SUPABASE_KEY"]
 
 
-from models.preprocessing import preprocess_data
+# ============================================================
+# IMPORTS
+# ============================================================
+
 from models.supabase_data import get_historical_data
-from models.feature_engineering import create_features
+from models.SHAP import calculate_shap_results
 
 
 # ============================================================
-# DATA
+# HISTORICAL DATA
 # ============================================================
 
-@st.cache_data
-def load_historical_data():
+@st.cache_data(
+    show_spinner=False
+)
+def load_historical_data_for_shap():
+
     return get_historical_data()
 
 
-@st.cache_data
-def prepare_shap_data(target_column):
-
-    historical_df = load_historical_data()
-
-    # Apply EXACT same feature engineering used during training
-    featured_df = create_features(historical_df)
-
-    (
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        encoder,
-        train,
-        test,
-        df_processed,
-        test_cities,
-        test_origins,
-    ) = preprocess_data(
-        df=featured_df,
-        target_column=target_column,
-    )
-
-    return X_test, test_cities
-
-
 # ============================================================
-# MODEL LOADING
+# SHAP CACHE
 # ============================================================
 
-@st.cache_resource
-def load_model(filename, model_type):
+@st.cache_data(
+    show_spinner=False
+)
+def get_cached_shap_results(target_column):
 
-    model_path = hf_hub_download(
-        repo_id=REPO_ID,
-        filename=filename,
-        repo_type="model",
-        token=os.getenv("HF_TOKEN"),
-    )
+    historical_df = load_historical_data_for_shap()
 
-    if model_type == "catboost":
-
-        model = CatBoostRegressor()
-        model.load_model(model_path)
-
-        return model
-
-    return joblib.load(model_path)
-
-
-# ============================================================
-# SHAP CALCULATION
-# ============================================================
-
-@st.cache_data
-def calculate_shap(target_column):
-
-    # --------------------------------------------------------
-    # LOAD CORRECT MODEL
-    # --------------------------------------------------------
-
-    if target_column == "target_24h":
-
-        model = load_model(
-            "xgboost_24h.pkl",
-            "xgboost"
-        )
-
-        model_type = "xgboost"
-
-    elif target_column == "target_48h":
-
-        model = load_model(
-            "catboost_48h.cbm",
-            "catboost"
-        )
-
-        model_type = "catboost"
-
-    else:
-
-        model = load_model(
-            "rf_model_72h.pkl",
-            "random_forest"
-        )
-
-        model_type = "random_forest"
-
-
-    # --------------------------------------------------------
-    # PREPARE DATA
-    # --------------------------------------------------------
-
-    X_test, test_cities = prepare_shap_data(target_column)
-
-    X_test = X_test.copy()
-
-    # Make absolutely sure only numeric ML columns remain
-    X_test = X_test.select_dtypes(
-        include=["number", "bool"]
-    )
-
-    X_test = X_test.astype(float)
-
-
-    # --------------------------------------------------------
-    # DEBUG INFORMATION
-    # --------------------------------------------------------
-
-    st.write(f"Model: {target_column}")
-    st.write(f"Model type: {model_type}")
-    st.write(f"X_TEST SHAPE: {X_test.shape}")
-    st.write(
-        f"Cities in SHAP data: "
-        f"{sorted(pd.Series(test_cities).unique())}"
+    return calculate_shap_results(
+        historical_df,
+        target_column,
     )
 
 
-    # ========================================================
-    # XGBOOST
-    # ========================================================
-
-    if model_type == "xgboost":
-
-        expected_features = model.n_features_in_
-
-        if expected_features != X_test.shape[1]:
-
-            raise ValueError(
-                f"Feature mismatch for {target_column}: "
-                f"model expects {expected_features} features, "
-                f"but X_test has {X_test.shape[1]}."
-            )
-
-        explainer = shap.TreeExplainer(model)
-
-        shap_values = explainer.shap_values(X_test)
-
-
-    # ========================================================
-    # RANDOM FOREST
-    # ========================================================
-
-    elif model_type == "random_forest":
-
-        expected_features = model.n_features_in_
-
-        if expected_features != X_test.shape[1]:
-
-            raise ValueError(
-                f"Feature mismatch for {target_column}: "
-                f"model expects {expected_features} features, "
-                f"but X_test has {X_test.shape[1]}."
-            )
-
-        explainer = shap.TreeExplainer(model)
-
-        shap_values = explainer.shap_values(X_test)
-
-
-    # ========================================================
-    # CATBOOST
-    # ========================================================
-
-    elif model_type == "catboost":
-
-        # ----------------------------------------------------
-        # DO NOT USE get_feature_count()
-        #
-        # The loaded model is reporting 0 there even though
-        # the actual trained model contains the features.
-        # ----------------------------------------------------
-
-        # Use the actual columns from our training pipeline.
-        feature_names = list(X_test.columns)
-
-        # Tell CatBoost the feature names explicitly.
-        #
-        # This is supported by CatBoost and makes the feature
-        # ordering explicit when using a pandas dataframe.
-        model.set_feature_names(feature_names)
-
-        # Create CatBoost Pool
-        test_pool = Pool(
-            X_test,
-            feature_names=feature_names
-        )
-
-        # ----------------------------------------------------
-        # CatBoost native SHAP
-        # ----------------------------------------------------
-
-        shap_result = model.get_feature_importance(
-            data=test_pool,
-            type="ShapValues",
-        )
-
-        # Last column is the expected/base value.
-        shap_values = shap_result[:, :-1]
-
-
-    return X_test, test_cities, shap_values
-
-
 # ============================================================
-# DISPLAY
+# SHAP UI
 # ============================================================
 
 def show_shap_analysis(city):
@@ -259,10 +74,28 @@ def show_shap_analysis(city):
         f"Model Explainability — {city}"
     )
 
+    st.caption(
+        "SHAP explains which features influenced the model's predictions."
+    )
 
-    # --------------------------------------------------------
-    # HORIZON SELECTOR
-    # --------------------------------------------------------
+    # ========================================================
+    # EXPLICITLY ENABLE SHAP
+    # ========================================================
+
+    show_explainability = st.checkbox(
+        "Show Model Explainability",
+        key=f"show_shap_{city}",
+    )
+
+    # IMPORTANT:
+    # If unchecked, absolutely NO SHAP calculation happens.
+
+    if not show_explainability:
+        return
+
+    # ========================================================
+    # HORIZON
+    # ========================================================
 
     horizon = st.radio(
         "Forecast Horizon",
@@ -275,16 +108,24 @@ def show_shap_analysis(city):
 
     target_column = f"target_{horizon}h"
 
-
-    # --------------------------------------------------------
-    # CALCULATE SHAP
-    # --------------------------------------------------------
+    # ========================================================
+    # CALCULATE / LOAD CACHED SHAP
+    # ========================================================
 
     try:
 
-        X_test, test_cities, shap_values = (
-            calculate_shap(target_column)
-        )
+        with st.spinner(
+            f"Preparing SHAP analysis for the {horizon}-hour model..."
+        ):
+
+            (
+                X_test,
+                test_cities,
+                shap_values,
+                shap_importance,
+            ) = get_cached_shap_results(
+                target_column
+            )
 
     except Exception as e:
 
@@ -294,19 +135,18 @@ def show_shap_analysis(city):
 
         return
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # CITY FILTER
-    # --------------------------------------------------------
+    # ========================================================
 
-    test_cities = pd.Series(
-        test_cities
-    ).reset_index(drop=True)
+    test_cities = (
+        pd.Series(test_cities)
+        .reset_index(drop=True)
+    )
 
     city_mask = (
         test_cities == city
     ).values
-
 
     X_city = X_test.loc[
         city_mask
@@ -316,33 +156,23 @@ def show_shap_analysis(city):
         city_mask
     ]
 
-
-    # --------------------------------------------------------
-    # NO DATA
-    # --------------------------------------------------------
+    # ========================================================
+    # NO CITY DATA
+    # ========================================================
 
     if len(X_city) == 0:
 
         st.warning(
-            f"No test data available for {city}."
+            f"No SHAP test data available for {city}."
         )
 
         return
 
-
-    st.write(
-        f"SHAP analysis is based on "
-        f"{len(X_city):,} test observations "
-        f"for {city} using the "
-        f"{horizon}-hour model."
-    )
-
-
     # ========================================================
-    # FEATURE IMPORTANCE
+    # CITY-SPECIFIC IMPORTANCE
     # ========================================================
 
-    shap_importance = pd.DataFrame(
+    city_importance = pd.DataFrame(
         {
             "Feature": X_city.columns,
             "Importance": abs(
@@ -351,43 +181,54 @@ def show_shap_analysis(city):
         }
     )
 
-    shap_importance = (
-        shap_importance
+    city_importance = (
+        city_importance
         .sort_values(
             "Importance",
-            ascending=False
+            ascending=False,
         )
         .reset_index(drop=True)
     )
 
+    # ========================================================
+    # INFO
+    # ========================================================
 
-    # --------------------------------------------------------
-    # TABLE
-    # --------------------------------------------------------
+    st.write(
+        f"SHAP analysis is based on "
+        f"{len(X_city):,} test observations "
+        f"for {city} using the "
+        f"{horizon}-hour model."
+    )
+
+    # ========================================================
+    # FEATURE IMPORTANCE
+    # ========================================================
 
     st.markdown(
         "### Feature Importance"
     )
 
     st.dataframe(
-        shap_importance.head(10),
+        city_importance.head(10),
         use_container_width=True,
         hide_index=True,
     )
 
-
-    # --------------------------------------------------------
-    # GRAPH
-    # --------------------------------------------------------
+    # ========================================================
+    # TOP 10 BAR CHART
+    # ========================================================
 
     st.markdown(
         "### Top 10 Features"
     )
 
     importance_chart = (
-        shap_importance
+        city_importance
         .head(10)
-        .sort_values("Importance")
+        .sort_values(
+            "Importance"
+        )
         .set_index("Feature")
     )
 
@@ -397,7 +238,6 @@ def show_shap_analysis(city):
         use_container_width=True,
     )
 
-
     # ========================================================
     # SHAP SUMMARY
     # ========================================================
@@ -406,7 +246,9 @@ def show_shap_analysis(city):
         "### Feature Influence"
     )
 
-    fig = plt.figure()
+    fig = plt.figure(
+        figsize=(10, 7)
+    )
 
     shap.summary_plot(
         shap_city,
@@ -423,9 +265,8 @@ def show_shap_analysis(city):
 
     plt.close(fig)
 
-
     # ========================================================
-    # INDIVIDUAL FEATURE EFFECT
+    # DEPENDENCE PLOT
     # ========================================================
 
     st.markdown(
@@ -433,7 +274,7 @@ def show_shap_analysis(city):
     )
 
     top_features = (
-        shap_importance
+        city_importance
         .head(3)["Feature"]
         .tolist()
     )
@@ -441,11 +282,15 @@ def show_shap_analysis(city):
     selected_feature = st.selectbox(
         "Select a feature",
         top_features,
-        key=f"shap_feature_{city}_{horizon}",
+        key=(
+            f"shap_feature_"
+            f"{city}_{horizon}"
+        ),
     )
 
-
-    fig = plt.figure()
+    fig = plt.figure(
+        figsize=(9, 6)
+    )
 
     shap.dependence_plot(
         selected_feature,
