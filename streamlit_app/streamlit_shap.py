@@ -12,8 +12,6 @@ from catboost import CatBoostRegressor
 from huggingface_hub import hf_hub_download
 
 
-# CONFIG
-
 REPO_ID = "flork-18115/AQI_prediciton_models"
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -24,21 +22,13 @@ if str(ROOT_DIR) not in sys.path:
 os.environ["SUPABASE_URL"] = st.secrets["SUPABASE_URL"]
 os.environ["SUPABASE_KEY"] = st.secrets["SUPABASE_KEY"]
 
-
-# Import AFTER environment variables are available
 from models.preprocessing import preprocess_data
 from models.supabase_data import get_historical_data
 from models.feature_engineering import create_features
 
-
-# DATA
-
 @st.cache_data
 def load_historical_data():
     return get_historical_data()
-
-
-# MODELS
 
 @st.cache_resource
 def load_model(filename, model_type):
@@ -51,9 +41,6 @@ def load_model(filename, model_type):
 
     return joblib.load(model_path)
 
-
-# PREPARE SHAP DATA
-
 @st.cache_data
 def prepare_shap_data(target_column):
     historical_df = load_historical_data()
@@ -65,9 +52,6 @@ def prepare_shap_data(target_column):
 
     return X_test, test_cities
 
-
-# CALCULATE SHAP
-
 @st.cache_data
 def calculate_shap(target_column):
     if target_column == "target_24h":
@@ -78,28 +62,29 @@ def calculate_shap(target_column):
         model = load_model("rf_model_72h.pkl", "random_forest")
 
     X_test, test_cities = prepare_shap_data(target_column)
+    st.write(f"Model: {target_column}")
+    st.write(f"X_TEST SHAPE: {X_test.shape}")
+    st.write(f"Cities in SHAP data: {sorted(set(test_cities))}")
 
-    # Safety check
-    if hasattr(model, "n_features_in_"):
-        if model.n_features_in_ != X_test.shape[1]:
-            raise ValueError(f"Feature mismatch for {target_column}: model expects {model.n_features_in_} features, but X_test has {X_test.shape[1]}.")
+    if target_column == "target_48h":
+        expected_features = model.get_feature_count()
+    else:
+        expected_features = model.n_features_in_
 
+    st.write(f"MODEL FEATURES: {expected_features}")
+
+    if expected_features != X_test.shape[1]:
+        raise ValueError(f"Feature mismatch for {target_column}: model expects {expected_features} features, but X_test has {X_test.shape[1]}.")
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_test)
 
     return X_test, test_cities, shap_values
 
 
-# SHAP UI
-
 def show_shap_analysis(city):
     st.divider()
 
     st.subheader(f"Model Explainability — {city}")
-
-    # --------------------------------------------------------
-    # Horizon selector
-    # --------------------------------------------------------
     horizon = st.radio("Forecast Horizon", [24, 48, 72], format_func=lambda x: f"{x}-Hour Forecast", horizontal=True, key=f"shap_horizon_{city}")
     target_column = f"target_{horizon}h"
 
@@ -108,10 +93,6 @@ def show_shap_analysis(city):
     except Exception as e:
         st.error(f"Could not calculate SHAP analysis: {e}")
         return
-
-    # --------------------------------------------------------
-    # Select city
-    # --------------------------------------------------------
     city_mask = test_cities == city
 
     X_city = X_test.loc[city_mask].copy()
@@ -123,29 +104,21 @@ def show_shap_analysis(city):
 
     st.write(f"SHAP analysis is based on {len(X_city):,} test observations for {city} using the {horizon}-hour model.")
 
-    # ========================================================
     # FEATURE IMPORTANCE
-    # ========================================================
     shap_importance = pd.DataFrame({"Feature": X_city.columns, "Importance": abs(shap_city).mean(axis=0)})
     shap_importance = shap_importance.sort_values("Importance", ascending=False).reset_index(drop=True)
 
-    # --------------------------------------------------------
     # Feature importance table
-    # --------------------------------------------------------
     st.markdown("### Feature Importance")
     st.dataframe(shap_importance.head(10), use_container_width=True, hide_index=True)
 
-    # --------------------------------------------------------
     # Feature importance graph
-    # --------------------------------------------------------
     st.markdown("### Top 10 Features")
     importance_chart = shap_importance.head(10).sort_values("Importance").set_index("Feature")
 
     st.bar_chart(importance_chart["Importance"], horizontal=True, use_container_width=True)
 
-    # ========================================================
     # SHAP SUMMARY PLOT
-    # ========================================================
     st.markdown("### Feature Influence")
     plt.figure()
 

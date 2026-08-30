@@ -13,13 +13,8 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-
-# CONFIG
-
 CITIES = ["Islamabad", "Lahore", "Peshawar", "Rawalpindi"]
 
-
-# SESSION STATE
 
 if "predictions" not in st.session_state:
     st.session_state["predictions"] = None
@@ -28,7 +23,7 @@ if "prediction_city" not in st.session_state:
     st.session_state["prediction_city"] = None
 
 
-# HELPER FUNCTIONS
+# helper func
 
 def get_aqi_status(aqi):
     if aqi <= 50:
@@ -66,17 +61,11 @@ def get_hourly_backfill_status():
 
     return total, evaluated, pending
 
-
-# MAIN TITLE
-
 st.title("AQI Prediction System")
 
 st.write("Air quality forecast for the next 24, 48 and 72 hours.")
-
 st.divider()
 
-
-# CITY SELECTION
 
 city = st.selectbox("Select city", CITIES, key="selected_city")
 
@@ -111,9 +100,6 @@ if st.session_state["predictions"] is not None:
     aqi_48 = predictions["prediction_48h"]
     aqi_72 = predictions["prediction_72h"]
 
-    # ========================================================
-    # HEADER
-    # ========================================================
     left, right = st.columns([2, 1])
 
     with left:

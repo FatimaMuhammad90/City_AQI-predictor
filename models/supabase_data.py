@@ -114,36 +114,42 @@ def get_flagged_horizons():
         )
 
     return flagged_horizons
-
-
-
-# HISTORICAL DATA
-
-
 def get_historical_data():
-    print("\n[2/4] Retrieving historical data...")
-
+    # added batchs to get all data for shap
     try:
-        response = (
-            supabase.table("historical_data")
-            .select("*")
-            .execute()
-        )
+        all_rows = []
+        start = 0
+        batch_size = 1000
+
+        while True:
+            response = (supabase.table("historical_data").select("*").range(start, start + batch_size - 1).execute())
+            rows = response.data
+            if not rows:
+                break
+
+            all_rows.extend(rows)
+
+            print( f"Retrieved {len(all_rows):,} records so far...")
+            if len(rows) < batch_size:
+                break
+            start += batch_size
+
     except Exception as e:
-        raise RuntimeError(
-            f"Could not access Supabase 'historical_data' table: {e}"
-        )
+        raise RuntimeError(f"Could not access Supabase 'historical_data' table: {e}")
 
-    rows = response.data
-
-    if not rows:
+    if not all_rows:
         raise RuntimeError("historical_data table returned no records.")
 
-    df = pd.DataFrame(rows)
-    print(f"Retrieved {len(df):,} historical records.")
+    df = pd.DataFrame(all_rows)
 
-    # Schema validation
-    missing_columns = REQUIRED_HISTORICAL_COLUMNS - set(df.columns)
+    print(
+        f"Retrieved {len(df):,} historical records."
+    )
+
+    missing_columns = (
+        REQUIRED_HISTORICAL_COLUMNS
+        - set(df.columns)
+    )
 
     if missing_columns:
         raise RuntimeError(
@@ -151,51 +157,69 @@ def get_historical_data():
             f"Missing columns: {sorted(missing_columns)}\n"
             f"Available columns: {sorted(df.columns)}"
         )
-
     print("Historical data schema validated.")
 
-    # Timestamp validation
     df["timestamp_utc"] = pd.to_datetime(
-        df["timestamp_utc"], utc=True, errors="coerce"
+        df["timestamp_utc"],
+        utc=True,
+        errors="coerce"
     )
 
-    invalid_timestamps = df["timestamp_utc"].isna().sum()
+    invalid_timestamps = (
+        df["timestamp_utc"].isna().sum()
+    )
+
     if invalid_timestamps > 0:
         raise RuntimeError(
-            f"historical_data contains {invalid_timestamps} invalid timestamps."
+            f"historical_data contains "
+            f"{invalid_timestamps} invalid timestamps."
         )
 
-    # City validation
+
+
     if df["city"].isna().any():
         raise RuntimeError(
-            "historical_data contains rows with missing city values."
+            "historical_data contains rows "
+            "with missing city values."
         )
 
-    # AQI validation
-    df["us_aqi"] = pd.to_numeric(df["us_aqi"], errors="coerce")
-
-    invalid_aqi = df["us_aqi"].isna().sum()
-    if invalid_aqi > 0:
-        raise RuntimeError(
-            f"historical_data contains {invalid_aqi} invalid us_aqi values."
-        )
-
-
-    df = df.sort_values(["city", "timestamp_utc"]).reset_index(drop=True)
-
-    duplicates = df.duplicated(subset=["city", "timestamp_utc"]).sum()
-    if duplicates > 0:
-        raise RuntimeError(
-            f"historical_data contains {duplicates} duplicate city/timestamp records."
-        )
-
-    print("Historical data integrity checks passed.")
-    print(f"Cities: {sorted(df['city'].unique())}")
-    print(
-        f"Time range: {df['timestamp_utc'].min()} → {df['timestamp_utc'].max()}"
+    df["us_aqi"] = pd.to_numeric(
+        df["us_aqi"],
+        errors="coerce"
     )
 
+    invalid_aqi = df["us_aqi"].isna().sum()
+
+    if invalid_aqi > 0:
+        raise RuntimeError(
+            f"historical_data contains "
+            f"{invalid_aqi} invalid us_aqi values."
+        )
+    df = (df.sort_values(["city", "timestamp_utc"]).reset_index(drop=True))
+    duplicates = df.duplicated(
+        subset=["city", "timestamp_utc"]
+    ).sum()
+
+    if duplicates > 0:
+        raise RuntimeError(
+            f"historical_data contains "
+            f"{duplicates} duplicate "
+            f"city/timestamp records."
+        )
+    print("Historical data integrity checks passed.")
+
+    print(f"Cities: {sorted(df['city'].unique())}")
+
+    print(f"Records per city:\n"
+        f"{df['city'].value_counts().sort_index()}")
+
+    print(
+        f"Time range: "
+        f"{df['timestamp_utc'].min()} → "
+        f"{df['timestamp_utc'].max()}"
+    )
     return df
+
 
 def delete_monitoring_entry(horizon=None):
     try:
