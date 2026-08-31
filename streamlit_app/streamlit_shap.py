@@ -12,19 +12,11 @@ from catboost import CatBoostRegressor, Pool
 from huggingface_hub import hf_hub_download
 
 
-# ============================================================
-# PATH
-# ============================================================
-
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-
-# ============================================================
-# ENVIRONMENT
-# ============================================================
 
 os.environ["SUPABASE_URL"] = st.secrets["SUPABASE_URL"]
 os.environ["SUPABASE_KEY"] = st.secrets["SUPABASE_KEY"]
@@ -35,59 +27,22 @@ from models.supabase_data import get_historical_data
 from models.feature_engineering import create_features
 
 
-# ============================================================
-# CONSTANTS
-# ============================================================
-
 REPO_ID = "flork-18115/AQI_prediciton_models"
+SHAP_SAMPLE_SIZE = 500
 
-
-# ============================================================
-# HISTORICAL DATA
-# ============================================================
 
 @st.cache_data
 def load_historical_data():
-
     return get_historical_data()
 
 
-# ============================================================
-# FEATURE PREPARATION
-# ============================================================
-
 @st.cache_data
 def prepare_shap_data(target_column):
-
     historical_df = load_historical_data()
 
-    # --------------------------------------------------------
-    # Same feature engineering used by the model
-    # --------------------------------------------------------
+    featured_df = create_features(historical_df)
 
-    featured_df = create_features(
-        historical_df
-    )
-
-    (
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        encoder,
-        train,
-        test,
-        df_processed,
-        test_cities,
-        test_origins,
-    ) = preprocess_data(
-        df=featured_df,
-        target_column=target_column,
-    )
-
-    # --------------------------------------------------------
-    # Keep only numerical columns
-    # --------------------------------------------------------
+    X_train, X_test, y_train, y_test, encoder, train, test, df_processed, test_cities, test_origins = preprocess_data(df=featured_df, target_column=target_column)
 
     X_test = X_test.select_dtypes(
         include=["number", "bool"]
@@ -99,34 +54,19 @@ def prepare_shap_data(target_column):
         test_cities
     ).reset_index(drop=True)
 
-    # Make sure indexes match
     X_test = X_test.reset_index(drop=True)
 
     return X_test, test_cities
 
 
-# ============================================================
-# MODEL LOADING
-# ============================================================
-
 @st.cache_resource
 def load_model(filename, model_type):
-
-    model_path = hf_hub_download(
-        repo_id=REPO_ID,
-        filename=filename,
-        repo_type="model",
-        token=os.getenv("HF_TOKEN"),
-    )
-
+    model_path = hf_hub_download( repo_id=REPO_ID, filename=filename,repo_type="model",token=os.getenv("HF_TOKEN"),)
     if model_type == "catboost":
-
         model = CatBoostRegressor()
-
         model.load_model(
             model_path
         )
-
         return model
 
     return joblib.load(
@@ -134,21 +74,11 @@ def load_model(filename, model_type):
     )
 
 
-# ============================================================
-# MODEL FEATURE NAMES
-# ============================================================
-
 def get_model_feature_names(model, model_type):
-
-    # --------------------------------------------------------
-    # XGBoost
-    # --------------------------------------------------------
 
     if model_type == "xgboost":
 
-        # Some sklearn XGBoost models expose this
         if hasattr(model, "feature_names_in_"):
-
             names = list(
                 model.feature_names_in_
             )
@@ -156,11 +86,8 @@ def get_model_feature_names(model, model_type):
             if names:
                 return names
 
-        # Otherwise inspect underlying booster
         if hasattr(model, "get_booster"):
-
             booster = model.get_booster()
-
             names = booster.feature_names
 
             if names:
@@ -168,14 +95,8 @@ def get_model_feature_names(model, model_type):
 
         return None
 
-    # --------------------------------------------------------
-    # Random Forest
-    # --------------------------------------------------------
-
     if model_type == "random_forest":
-
         if hasattr(model, "feature_names_in_"):
-
             names = list(
                 model.feature_names_in_
             )
@@ -185,14 +106,8 @@ def get_model_feature_names(model, model_type):
 
         return None
 
-    # --------------------------------------------------------
-    # CatBoost
-    # --------------------------------------------------------
-
     if model_type == "catboost":
-
         try:
-
             names = model.feature_names_
 
             if names:
@@ -206,12 +121,7 @@ def get_model_feature_names(model, model_type):
     return None
 
 
-# ============================================================
-# ALIGN FEATURES WITH MODEL
-# ============================================================
-
 def align_features(X_test, model, model_type):
-
     X_test = X_test.copy()
 
     model_feature_names = (
@@ -221,12 +131,7 @@ def align_features(X_test, model, model_type):
         )
     )
 
-    # --------------------------------------------------------
-    # If model has explicit feature names
-    # --------------------------------------------------------
-
     if model_feature_names:
-
         missing = [
             feature
             for feature in model_feature_names
@@ -234,7 +139,6 @@ def align_features(X_test, model, model_type):
         ]
 
         if missing:
-
             raise ValueError(
                 "SHAP feature mismatch.\n\n"
                 f"The model requires these features, "
@@ -242,27 +146,20 @@ def align_features(X_test, model, model_type):
                 f"{missing}"
             )
 
-        # Exact model ordering
         X_test = X_test[
             model_feature_names
         ]
 
         return X_test
 
-    # --------------------------------------------------------
-    # No feature names available
-    # --------------------------------------------------------
-
     if model_type in (
         "xgboost",
         "random_forest",
     ):
-
         if hasattr(
             model,
             "n_features_in_"
         ):
-
             expected = (
                 model.n_features_in_
             )
@@ -270,7 +167,6 @@ def align_features(X_test, model, model_type):
             actual = X_test.shape[1]
 
             if expected != actual:
-
                 raise ValueError(
                     f"Feature mismatch: "
                     f"model expects {expected} "
@@ -281,14 +177,9 @@ def align_features(X_test, model, model_type):
     return X_test
 
 
-# ============================================================
-# SHAP CALCULATION
-# ============================================================
-
 @st.cache_data
 def calculate_shap(target_column, city):
 
-    # Load model
     if target_column == "target_24h":
         model = load_model("xgboost_24h.pkl", "xgboost")
         model_type = "xgboost"
@@ -301,7 +192,6 @@ def calculate_shap(target_column, city):
         model = load_model("rf_model_72h.pkl", "random_forest")
         model_type = "random_forest"
 
-    # Prepare data
     X_test, test_cities = prepare_shap_data(target_column)
 
     X_test = X_test.copy()
@@ -312,17 +202,9 @@ def calculate_shap(target_column, city):
 
     test_cities = pd.Series(test_cities).reset_index(drop=True)
 
-    # --------------------------------------------------------
-    # FILTER CITY BEFORE SHAP
-    # --------------------------------------------------------
-
     city_mask = (test_cities == city).values
 
     X_city = X_test.loc[city_mask].copy()
-
-    # --------------------------------------------------------
-    # SAMPLE DATA
-    # --------------------------------------------------------
 
     if len(X_city) > SHAP_SAMPLE_SIZE:
         X_city = X_city.sample(
@@ -330,12 +212,7 @@ def calculate_shap(target_column, city):
             random_state=42
         )
 
-    # --------------------------------------------------------
-    # SHAP
-    # --------------------------------------------------------
-
     if model_type == "xgboost":
-
         expected_features = model.n_features_in_
 
         if expected_features != X_city.shape[1]:
@@ -346,11 +223,9 @@ def calculate_shap(target_column, city):
             )
 
         explainer = shap.TreeExplainer(model)
-
         shap_values = explainer.shap_values(X_city)
 
     elif model_type == "random_forest":
-
         expected_features = model.n_features_in_
 
         if expected_features != X_city.shape[1]:
@@ -361,11 +236,9 @@ def calculate_shap(target_column, city):
             )
 
         explainer = shap.TreeExplainer(model)
-
         shap_values = explainer.shap_values(X_city)
 
     else:
-
         feature_names = list(X_city.columns)
 
         model.set_feature_names(feature_names)
@@ -384,9 +257,6 @@ def calculate_shap(target_column, city):
 
     return X_city, shap_values
 
-# ============================================================
-# DISPLAY SHAP ANALYSIS
-# ============================================================
 
 def show_shap_analysis(city):
 
@@ -395,11 +265,6 @@ def show_shap_analysis(city):
     st.subheader(
         f"Model Explainability — {city}"
     )
-
-
-    # ========================================================
-    # HORIZON
-    # ========================================================
 
     horizon = st.radio(
         "Forecast Horizon",
@@ -414,73 +279,28 @@ def show_shap_analysis(city):
         f"target_{horizon}h"
     )
 
-
-    # ========================================================
-    # CALCULATE SHAP
-    # ========================================================
-
     try:
-
         (
-            X_test,
-            test_cities,
+            X_city,
             shap_values,
         ) = calculate_shap(
-            target_column
+            target_column,
+            city,
         )
 
     except Exception as e:
-
         st.error(
             f"Could not calculate SHAP "
             f"analysis:\n\n{e}"
         )
-
         return
 
-
-    # ========================================================
-    # CITY FILTER
-    # ========================================================
-
-    test_cities = (
-        pd.Series(
-            test_cities
-        )
-        .reset_index(drop=True)
-    )
-
-    city_mask = (
-        test_cities == city
-    ).values
-
-
-    X_city = (
-        X_test
-        .loc[city_mask]
-        .copy()
-    )
-
-    shap_city = (
-        shap_values[
-            city_mask
-        ]
-    )
-
-
-    # ========================================================
-    # NO DATA
-    # ========================================================
-
     if len(X_city) == 0:
-
         st.warning(
             f"No test data available "
             f"for {city}."
         )
-
         return
-
 
     st.write(
         f"SHAP analysis is based on "
@@ -489,16 +309,11 @@ def show_shap_analysis(city):
         f"{horizon}-hour model."
     )
 
-
-    # ========================================================
-    # FEATURE IMPORTANCE
-    # ========================================================
-
     shap_importance = pd.DataFrame(
         {
             "Feature": X_city.columns,
             "Importance": (
-                abs(shap_city)
+                abs(shap_values)
                 .mean(axis=0)
             ),
         }
@@ -513,11 +328,6 @@ def show_shap_analysis(city):
         .reset_index(drop=True)
     )
 
-
-    # ========================================================
-    # TABLE
-    # ========================================================
-
     st.markdown(
         "### Feature Importance"
     )
@@ -527,11 +337,6 @@ def show_shap_analysis(city):
         use_container_width=True,
         hide_index=True,
     )
-
-
-    # ========================================================
-    # BAR CHART
-    # ========================================================
 
     st.markdown(
         "### Top 10 Features"
@@ -556,11 +361,6 @@ def show_shap_analysis(city):
         use_container_width=True,
     )
 
-
-    # ========================================================
-    # SHAP SUMMARY
-    # ========================================================
-
     st.markdown(
         "### Feature Influence"
     )
@@ -568,7 +368,7 @@ def show_shap_analysis(city):
     fig = plt.figure()
 
     shap.summary_plot(
-        shap_city,
+        shap_values,
         X_city,
         show=False,
     )
@@ -581,11 +381,6 @@ def show_shap_analysis(city):
     )
 
     plt.close(fig)
-
-
-    # ========================================================
-    # INDIVIDUAL FEATURE EFFECT
-    # ========================================================
 
     st.markdown(
         "### Individual Feature Effects"
@@ -610,12 +405,11 @@ def show_shap_analysis(city):
         )
     )
 
-
     fig = plt.figure()
 
     shap.dependence_plot(
         selected_feature,
-        shap_city,
+        shap_values,
         X_city,
         show=False,
     )
