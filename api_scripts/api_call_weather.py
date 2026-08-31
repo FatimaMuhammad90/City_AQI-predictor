@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 from datetime import date, timedelta
-
+# for weather
 CITIES = [
     {   "city": "Islamabad",
         "lat": 33.6844,

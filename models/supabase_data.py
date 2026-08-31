@@ -5,7 +5,7 @@ import pandas as pd
 from supabase import create_client
 
 load_dotenv()
-
+# Access supabsae tables
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 

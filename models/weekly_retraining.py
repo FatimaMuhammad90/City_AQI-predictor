@@ -1,267 +1,395 @@
+from datetime import date, datetime, timedelta
 import os
 import time
-from datetime import datetime
-from huggingface_hub import HfApi
-from models.preprocessing import preprocess_data
-import joblib
-import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
-from models.supabase_data import get_flagged_horizons, get_historical_data, delete_monitoring_entry
-from models.train_ML_models import select_best_ml_model, train_ml_models
-from models.LSTM_model import prepare_lstm_data, train_lstm_model
-from models.feature_engineering import create_features
 
-HORIZONS = [24, 48 , 72]
+from dotenv import load_dotenv
+import pandas as pd
+import requests
+from supabase import Client, create_client
 
 load_dotenv()
 
-def compare_final_models(ml_name, ml_model, ml_predictions, ml_stats, lstm_model, lstm_predictions,lstm_mae, lstm_rmse, lstm_r2,):
-    ml_mae = ml_stats["MAE"]
-    ml_r2 = ml_stats["R2"]
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-    print("FINAL MODEL COMPARISON")
-    print(f"{ml_name}: MAE={ml_mae:.4f}, "
-        f"RMSE={ml_stats['RMSE']:.4f}, "
-    f"R²={ml_r2:.4f}" )
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set")
 
-    print(
-        f"LSTM: MAE={lstm_mae:.4f}, "
-        f"RMSE={lstm_rmse:.4f}, "
-        f"R²={lstm_r2:.4f}"
-    )
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # MAE is the primary metric
-    if ml_mae < lstm_mae:
-        winner_name = ml_name
-        winner_model = ml_model
-        winner_predictions = ml_predictions
-        winner_mae = ml_mae
-        winner_rmse = ml_stats["RMSE"]
-        winner_r2 = ml_r2
+CITIES = {
+    "Islamabad": (33.6844, 73.0479),
+    "Lahore": (31.5204, 74.3587),
+    "Peshawar": (34.0151, 71.5249),
+    "Rawalpindi": (33.5651, 73.0169),
+}
 
-    elif lstm_mae < ml_mae:
-        winner_name = "LSTM"
-        winner_model = lstm_model
-        winner_predictions = lstm_predictions
-        winner_mae = lstm_mae
-        winner_rmse = lstm_rmse
-        winner_r2 = lstm_r2
+BASELINE_MAE = {24: 12.18, 48: 15.84, 72: 16.07}
+HORIZON_MODEL = {24: "xgboost", 48: "catboost", 72: "random_forest"}
+ERROR_THRESHOLD = 20
+CONSECUTIVE_BAD_DAYS = 5
 
-    else:
-        # to prevent ties, higher r2 wins
-        if ml_r2 >= lstm_r2:
-            winner_name = ml_name
-            winner_model = ml_model
-            winner_predictions = ml_predictions
-            winner_mae = ml_mae
-            winner_rmse = ml_stats["RMSE"]
-            winner_r2 = ml_r2
-        else:
-            winner_name = "LSTM"
-            winner_model = lstm_model
-            winner_predictions = lstm_predictions
-            winner_mae = lstm_mae
-            winner_rmse = lstm_rmse
-            winner_r2 = lstm_r2
-
-    print("\nFINAL WINNER")
-    print(
-        f"{winner_name} | "
-        f"MAE={winner_mae:.4f} | "
-        f"RMSE={winner_rmse:.4f} | "
-        f"R²={winner_r2:.4f}"
-    )
-
-    return {
-        "name": winner_name,
-        "model": winner_model,
-        "predictions": winner_predictions,
-        "MAE": winner_mae,
-        "RMSE": winner_rmse,
-        "R2": winner_r2,
-    }
-
-def train_ml_for_horizon(historical_df, horizon):
-    print("\n" + "=" * 60)
-    print(f"ML RETRAINING — {horizon}")
-    print("=" * 60)
-    processed = preprocess_data(df=historical_df, target_column=horizon)
-
-    ( X_train, X_test, y_train, y_test, encoder,train,test,df_processed,test_cities,test_origins,) = processed
-
-    trained_models, predictions, results_df = train_ml_models(
-        X_train, X_test, y_train, y_test
-    )
-
-    print("\nML MODEL RESULTS")
-    print(results_df)
-
-    winner_name, winner_model, winner_predictions, winner_stats = (
-        select_best_ml_model(trained_models, predictions, results_df)
-    )
-
-    print(f"\nBest ML model: {winner_name}")
-
-    return {
-        "name": winner_name,
-        "model": winner_model,
-        "predictions": winner_predictions,
-        "MAE": winner_stats["MAE"],
-        "RMSE": winner_stats["RMSE"],
-        "R2": winner_stats["R2"],
-        "processed": processed,
-    }
-
-def train_lstm_for_horizon(historical_df, horizon):
-    print(f"LSTM RETRAINING — {horizon}")
-    # LSTM receives raw historical data.
-    # It performs its own target generation, sequence generation, split, scaling.
-    lstm_data = prepare_lstm_data(
-        df=historical_df,
-        target_column=horizon,
-        sequence_length=24,
-        test_size=0.2,
-    )
-
-    model, predictions, mae, rmse, r2, history = train_lstm_model(
-        lstm_data,
-        lstm_units=64,
-        dropout_rate=0.2,
-        epochs=50,
-        batch_size=64,
-    )
-
-    return {
-        "name": "LSTM",
-        "model": model,
-        "predictions": predictions,
-        "MAE": mae,
-        "RMSE": rmse,
-        "R2": r2,
-        "processed": lstm_data,
-        "history": history,
-    }
-
-
-
-def save_winner(winner, horizon):
-    os.makedirs("../models/retrained", exist_ok=True)
-    model_name = winner["name"]
-    upload_successful = False
-    current_date = datetime.now().strftime("%Y-%m-%d")
-
-    if model_name == "LSTM":
-        filename = f"{current_date}_{horizon}.keras"
-        path = f"../models/retrained/{filename}"
-        winner["model"].save(path)
-
-    elif model_name == "CatBoost":
-        filename = f"{current_date}_{horizon}.cbm"
-        path = f"../models/retrained/{filename}"
-        winner["model"].save_model(path)
-
-    else:
-        filename = f"{current_date}_{horizon}.pkl"
-        path = f"../models/retrained/{filename}"
-        joblib.dump(winner["model"], path)
-
-    print(f"\nWinner saved locally: {path}")
-
-    repo_id = "flork-18115/AQI_prediciton_models"
-
-    # Grab the token from the environment
-    hf_token = os.getenv("HF_TOKEN")
-
-    if not hf_token:
-        print("Warning: HF_TOKEN not found in environment. Upload will likely fail.")
-
-    # Authenticate the API instance directly
-    api = HfApi(token=hf_token)
-    max_retries = 3
-
-    for attempt in range(1, max_retries + 1):
+def make_request(url, params, retries=3, timeout=60):
+    for attempt in range(1, retries + 1):
         try:
-            print(f"Uploading {filename} to {repo_id} (Attempt {attempt}/{max_retries})...")
-            api.upload_file(path_or_fileobj=path, path_in_repo=filename, repo_id=repo_id,repo_type="model", commit_message=f"Automated upload for {horizon}h horizon. Best model: {model_name} (MAE: {winner.get('MAE', 'N/A'):.4f})")
-            print("Upload successful!")
-            upload_successful = True
-            break
-
-        except Exception as e:
-            print(f"Attempt {attempt} failed: {e}")
-            if attempt < max_retries:
-                print("Retrying in 5 seconds.")
+            response = requests.get(url, params=params, timeout=timeout)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed (attempt {attempt}/{retries}): {e}")
+            if attempt < retries:
                 time.sleep(5)
             else:
-                print("Failed to upload after multiple attempts. Moving on.")
-    if upload_successful:
-        delete_monitoring_entry(horizon=horizon)
+                raise
 
-    return path
+def get_actual_aqi(city, target_times):
+    if not target_times:
+        return {}
+    if city not in CITIES:
+        raise ValueError(f"Unknown city: {city}")
+    latitude, longitude = CITIES[city]
+    target_times = [pd.Timestamp(t).tz_convert("UTC") if pd.Timestamp(t).tzinfo else pd.Timestamp(t).tz_localize("UTC") for t in target_times]
+    start_date = min(target_times).strftime("%Y-%m-%d")
+    end_date = max(target_times).strftime("%Y-%m-%d")
+    url = "https://air-quality-api.open-meteo.com/v1/air-quality"
+    params = {"latitude": latitude, "longitude": longitude, "hourly": "us_aqi,pm2_5,pm10,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone", "start_date": start_date, "end_date": end_date, "timezone": "GMT"}
+    response = make_request(url, params)
+    data = response.json()
+    if "hourly" not in data:
+        raise ValueError(f"No AQI data returned for {city}")
+    df = pd.DataFrame(data["hourly"])
+    df["timestamp_utc"] = pd.to_datetime(df["time"], utc=True)
+    df = df.drop(columns=["time"]).rename(columns={"carbon_monoxide": "co", "nitrogen_dioxide": "no2", "sulphur_dioxide": "so2", "ozone": "o3"})
+    lookup = {}
+    for _, row in df.iterrows():
+        timestamp = row["timestamp_utc"]
+        lookup[timestamp] = {"us_aqi": row["us_aqi"], "pm2_5": row["pm2_5"], "pm10": row["pm10"], "co": row["co"], "no2": row["no2"], "so2": row["so2"], "o3": row["o3"]}
+    return lookup
 
-def train_one_horizon(historical_df, horizon):
-    ml_result = train_ml_for_horizon(historical_df, horizon)
+def get_weather(city, start_date, end_date):
+    if city not in CITIES:
+        raise ValueError(f"Unknown city: {city}")
+    latitude, longitude = CITIES[city]
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {"latitude": latitude, "longitude": longitude, "hourly": "temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,precipitation,cloud_cover", "start_date": start_date.strftime("%Y-%m-%d"), "end_date": end_date.strftime("%Y-%m-%d"), "timezone": "GMT"}
+    response = make_request(url, params)
+    data = response.json()
+    if "hourly" not in data:
+        raise ValueError(f"No weather data returned for {city}")
+    df = pd.DataFrame(data["hourly"])
+    df["timestamp_utc"] = pd.to_datetime(df["time"], utc=True)
+    df = df.drop(columns=["time"]).rename(columns={"temperature_2m": "temperature", "relative_humidity_2m": "humidity", "surface_pressure": "pressure", "wind_speed_10m": "wind_speed", "wind_direction_10m": "wind_direction"})
+    return df
 
-    lstm_result = train_lstm_for_horizon(historical_df, horizon)
-    winner = compare_final_models(
-        ml_name=ml_result["name"],
-        ml_model=ml_result["model"],
-        ml_predictions=ml_result["predictions"],
-        ml_stats={
-            "MAE": ml_result["MAE"],
-            "RMSE": ml_result["RMSE"],
-            "R2": ml_result["R2"],
-        },
-        lstm_model=lstm_result["model"],
-        lstm_predictions=lstm_result["predictions"],
-        lstm_mae=lstm_result["MAE"],
-        lstm_rmse=lstm_result["RMSE"],
-        lstm_r2=lstm_result["R2"],
-    )
-    model_path = save_winner(winner, horizon)
-    return {
-        "horizon": horizon,
-        "winner": winner,
-        "model_path": model_path,
-        "ml_result": ml_result,
-        "lstm_result": lstm_result,
-    }
+def get_pending_predictions():
+    now = datetime.now().astimezone().isoformat()
+    response = supabase.table("predictions").select("*").eq("evaluated", False).lt("target_time", now).execute()
+    return response.data or []
+
+def update_prediction(prediction_id, actual_aqi, error_percent):
+    data = {"actual_aqi": float(actual_aqi), "error_percent": float(error_percent) if error_percent is not None else None, "evaluated": True}
+    return supabase.table("predictions").update(data).eq("id", prediction_id).execute()
+
+def calculate_error(predicted, actual):
+    if actual is None or actual == 0:
+        return None
+    return round(abs(predicted - actual) / actual * 100, 2)
+
+def store_historical_data(rows):
+    if not rows:
+        return
+    try:
+        supabase.table("historical_data").upsert(rows, on_conflict="city,timestamp_utc").execute()
+        print(f"Stored {len(rows)} historical observations.")
+    except Exception as e:
+        print(f"WARNING: Historical data storage failed: {e}")
+
+def backfill_predictions():
+    print("\n=== DAILY BACKFILL ===")
+    pending = get_pending_predictions()
+    if not pending:
+        print("No pending predictions.")
+        return
+    print(f"Found {len(pending)} pending predictions.")
+    city_groups = {}
+    for prediction in pending:
+        city = prediction.get("city")
+        if city not in CITIES:
+            print(f"WARNING: Unknown city in prediction: {city}")
+            continue
+        city_groups.setdefault(city, []).append(prediction)
+    for city, predictions in city_groups.items():
+        print(f"\nProcessing {city}: {len(predictions)} predictions")
+        target_times = [pd.Timestamp(p["target_time"]) for p in predictions]
+        try:
+            aqi_lookup = get_actual_aqi(city, target_times)
+            min_date = min(target_times).date()
+            max_date = max(target_times).date()
+            weather_df = get_weather(city, min_date, max_date)
+            weather_lookup = weather_df.set_index("timestamp_utc").to_dict("index")
+            historical_rows = []
+            for prediction in predictions:
+                prediction_id = prediction["id"]
+                target_time = pd.Timestamp(prediction["target_time"]).tz_convert("UTC")
+                actual_data = aqi_lookup.get(target_time)
+                if not actual_data:
+                    print(f"  No AQI available for {target_time}")
+                    continue
+                actual_aqi = actual_data["us_aqi"]
+                if pd.isna(actual_aqi):
+                    print(f" AQI is null for {target_time}")
+                    continue
+                actual_aqi = float(actual_aqi)
+                predicted_aqi = float(prediction["predicted_aqi"])
+                error = calculate_error(predicted_aqi, actual_aqi)
+                try:
+                    update_prediction(prediction_id, actual_aqi, error)
+                    print(f" Prediction {prediction_id}: pred={predicted_aqi:.2f}, actual={actual_aqi:.2f}, error={error}%")
+                except Exception as e:
+                    print(f"  WARNING: Could not update prediction {prediction_id}: {e}")
+                    continue
+                weather = weather_lookup.get(target_time)
+                if weather is None:
+                    print(f"  WARNING: No weather for {target_time}")
+                    continue
+                historical_rows.append({
+                    "timestamp_utc": target_time.isoformat(),
+                    "city": city,
+                    "latitude": CITIES[city][0],
+                    "longitude": CITIES[city][1],
+                    "pm2_5": float(actual_data["pm2_5"]) if pd.notna(actual_data["pm2_5"]) else None,
+                    "pm10": float(actual_data["pm10"]) if pd.notna(actual_data["pm10"]) else None,
+                    "co": float(actual_data["co"]) if pd.notna(actual_data["co"]) else None,
+                    "no2": float(actual_data["no2"]) if pd.notna(actual_data["no2"]) else None,
+                    "so2": float(actual_data["so2"]) if pd.notna(actual_data["so2"]) else None,
+                    "o3": float(actual_data["o3"]) if pd.notna(actual_data["o3"]) else None,
+                    "us_aqi": actual_aqi,
+                    "temperature": weather.get("temperature"),
+                    "humidity": weather.get("humidity"),
+                    "pressure": weather.get("pressure"),
+                    "wind_speed": weather.get("wind_speed"),
+                    "wind_direction": weather.get("wind_direction"),
+                    "precipitation": weather.get("precipitation"),
+                    "cloud_cover": weather.get("cloud_cover"),
+                })
+            store_historical_data(historical_rows)
+        except Exception as e:
+            print(f"ERROR processing {city}: {e}")
+
+def get_previous_week():
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    previous_monday = this_monday - timedelta(days=7)
+    previous_sunday = this_monday - timedelta(days=1)
+    return previous_monday, previous_sunday
+
+def get_week_predictions(city, horizon, start_date, end_date):
+    start = pd.Timestamp(start_date).tz_localize("UTC").isoformat()
+    end = (pd.Timestamp(end_date).tz_localize("UTC") + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)).isoformat()
+    response = supabase.table("predictions").select("*").eq("city", city).eq("horizon", horizon).eq("evaluated", True).gte("target_time", start).lte("target_time", end).order("target_time", desc=False).execute()
+    return response.data or []
+
+def calculate_mae(predictions):
+    if not predictions:
+        return None
+    df = pd.DataFrame(predictions)
+    required = ["predicted_aqi", "actual_aqi"]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        print(f"WARNING: Missing MAE columns: {missing}")
+        return None
+    df = df.dropna(subset=required)
+    if df.empty:
+        return None
+    return round((df["predicted_aqi"] - df["actual_aqi"]).abs().mean(), 2)
+
+def get_daily_status(predictions):
+    if not predictions:
+        return {}
+    df = pd.DataFrame(predictions)
+    required = ["target_time", "error_percent"]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        print(f"WARNING: Missing daily status columns: {missing}")
+        return {}
+    df["target_time"] = pd.to_datetime(df["target_time"], utc=True, errors="coerce")
+    df["error_percent"] = pd.to_numeric(df["error_percent"], errors="coerce")
+    df = df.dropna(subset=["target_time", "error_percent"])
+    if df.empty:
+        return {}
+    df["date"] = df["target_time"].dt.date
+    daily = {}
+    for day, group in df.groupby("date"):
+        daily[day] = bool(group["error_percent"].gt(ERROR_THRESHOLD).any())
+    return daily
+
+def get_max_consecutive_bad_days(daily_status):
+    if not daily_status:
+        return 0
+    dates = sorted(daily_status.keys())
+    current = 0
+    maximum = 0
+    previous_date = None
+    for current_date in dates:
+        is_bad = daily_status[current_date]
+        if is_bad:
+            if previous_date is not None and current_date == previous_date + timedelta(days=1):
+                current += 1
+            else:
+                current = 1
+        else:
+            current = 0
+        maximum = max(maximum, current)
+        previous_date = current_date
+    return maximum
+
+def validate_monitoring_result(row):
+    required_columns = {"check_date", "city", "model", "horizon", "total_predictions", "bad_predictions", "consecutive_bad_days", "flagged", "mae", "baseline_mae"}
+    missing = required_columns - set(row.keys())
+    if missing:
+        raise ValueError(f"Monitoring row missing columns: {sorted(missing)}")
+    if row["city"] not in CITIES:
+        raise ValueError(f"Invalid city: {row['city']}")
+    if row["horizon"] not in HORIZON_MODEL:
+        raise ValueError(f"Invalid horizon: {row['horizon']}")
+    if row["model"] != HORIZON_MODEL[row["horizon"]]:
+        raise ValueError(f"Model/horizon mismatch: {row['model']} / {row['horizon']}")
+    if row["total_predictions"] < 0:
+        raise ValueError("total_predictions cannot be negative")
+    if row["bad_predictions"] < 0:
+        raise ValueError("bad_predictions cannot be negative")
+    if row["bad_predictions"] > row["total_predictions"]:
+        raise ValueError("bad_predictions cannot exceed total_predictions")
+    if row["consecutive_bad_days"] < 0:
+        raise ValueError("consecutive_bad_days cannot be negative")
+    if not isinstance(row["flagged"], bool):
+        raise ValueError("flagged must be a boolean")
+    return True
+
+def store_monitoring_results(results):
+    if not results:
+        print("No monitoring results to insert.")
+        return False
+    validated = []
+    for row in results:
+        validate_monitoring_result(row)
+        clean_row = {
+            "check_date": str(row["check_date"]),
+            "city": str(row["city"]),
+            "model": str(row["model"]),
+            "horizon": int(row["horizon"]),
+            "total_predictions": int(row["total_predictions"]),
+            "bad_predictions": int(row["bad_predictions"]),
+            "consecutive_bad_days": int(row["consecutive_bad_days"]),
+            "flagged": bool(row["flagged"]),
+            "mae": float(row["mae"]) if row["mae"] is not None else None,
+            "baseline_mae": float(row["baseline_mae"]) if row["baseline_mae"] is not None else None,
+        }
+        validated.append(clean_row)
+    try:
+        response = supabase.table("monitoring").insert(validated).execute()
+        if not response.data:
+            print("WARNING: Monitoring insert returned no data.")
+            return False
+        print(f"Successfully inserted {len(response.data)} monitoring records.")
+        return True
+    except Exception as e:
+        print(f"CRITICAL: Monitoring table insertion failed: {e}")
+        return False
+
+def delete_previous_week_predictions(start_date, end_date):
+    start_str = start_date.isoformat()
+    end_str = (end_date + timedelta(days=1)).isoformat()
+
+    print(f"\nDeleting evaluated predictions from {start_date} to {end_date}...")
+    try:
+        response = supabase.table("predictions").delete().eq("evaluated", True).gte("target_time", start_str).lt("target_time", end_str).execute()
+        deleted = response.data or []
+        print(f"Deleted {len(deleted)} previous-week predictions.")
+        return deleted
+    except Exception as e:
+        print(f"WARNING: Prediction cleanup failed: {e}")
+        return []
+
+def run_weekly_monitoring():
+    today = date.today()
+    if today.weekday() != 0:
+        print("Not Monday. Weekly monitoring skipped.")
+        return
+    print("\n=== MONDAY MODEL MONITORING ===")
+    start_date, end_date = get_previous_week()
+    print(f"Evaluating: {start_date} → {end_date}")
+    results = []
+    for city in CITIES:
+        for horizon in [24, 48, 72]:
+            model = HORIZON_MODEL[horizon]
+            baseline = BASELINE_MAE[horizon]
+            try:
+                predictions = get_week_predictions(city, horizon, start_date, end_date)
+                if not predictions:
+                    print(f"{city} | {horizon}h: No evaluated predictions")
+                    continue
+                mae = calculate_mae(predictions)
+                daily_status = get_daily_status(predictions)
+                consecutive_bad = get_max_consecutive_bad_days(daily_status)
+                bad_days = sum(daily_status.values())
+                bad_predictions = 0
+                for prediction in predictions:
+                    error = prediction.get("error_percent")
+                    if error is not None:
+                        try:
+                            if float(error) > ERROR_THRESHOLD:
+                                bad_predictions += 1
+                        except (TypeError, ValueError):
+                            pass
+                flagged = consecutive_bad >= CONSECUTIVE_BAD_DAYS
+                print(f"\n{city} | {horizon}h | {model}")
+                print(f"Predictions: {len(predictions)}")
+                print(f"Bad predictions: {bad_predictions}")
+                print(f"MAE: {mae}")
+                print(f"Baseline: {baseline}")
+                print(f"Bad days: {bad_days}")
+                print(f"Consecutive bad: {consecutive_bad}")
+                print(f"FLAGGED: {flagged}")
+                results.append({
+                    "check_date": today.isoformat(),
+                    "city": city,
+                    "model": model,
+                    "horizon": horizon,
+                    "total_predictions": len(predictions),
+                    "bad_predictions": bad_predictions,
+                    "consecutive_bad_days": consecutive_bad,
+                    "mae": mae,
+                    "baseline_mae": baseline,
+                    "flagged": flagged,
+                })
+            except Exception as e:
+                print(f"WARNING: Monitoring failed for {city} {horizon}h: {e}")
+    if not results:
+        print("\nNo monitoring results generated.")
+        print("Predictions were NOT deleted.")
+        return
+    print(f"\n--- Inserting {len(results)} records into monitoring table ---")
+    saved = store_monitoring_results(results)
+    if not saved:
+        print("CRITICAL: Monitoring records were NOT saved.")
+        print("Predictions were NOT deleted.")
+        return
+    delete_previous_week_predictions(start_date, end_date)
 
 def main():
-    print("=" * 60)
-    print("WEEKLY MODEL RETRAINING PIPELINE")
-    print("=" * 60)
 
-    # 1. Check monitoring table
-    flagged_horizons = get_flagged_horizons()
+    print("DAILY AQI MONITORING PIPELINE")
 
-    if not flagged_horizons:
-        print("No horizons flagged for retraining.")
-        return
+    try:
+        backfill_predictions()
+    except Exception as e:
+        print(f"CRITICAL WARNING: Backfill section failed: {e}")
+    try:
+        run_weekly_monitoring()
+    except Exception as e:
+        print(f"CRITICAL WARNING: Weekly monitoring failed: {e}")
 
-    print("\nFlagged horizons:", flagged_horizons)
-
-    # 2. get historical data & Feature Engineer
-    raw_historical_df = get_historical_data()
-    print(f"\nRaw historical data loaded: {raw_historical_df.shape}")
-
-    print("\nApplying Feature Engineering...")
-    historical_df = create_features(raw_historical_df)
-    print(f"Engineered historical data shape: {historical_df.shape}")
-
-    results = {}
-
-    for horizon in flagged_horizons:
-        if horizon not in HORIZONS:
-            print(f"Skipping unknown horizon: {horizon}")
-            continue
-
-        results[horizon] = train_one_horizon(historical_df, horizon)
-
-    for horizon, result in results.items():
-        winner = result["winner"]
-        print(f"{horizon}: {winner['name']} (MAE={winner['MAE']:.4f})")
 
 if __name__ == "__main__":
     main()

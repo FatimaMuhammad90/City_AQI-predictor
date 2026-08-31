@@ -9,7 +9,7 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-
+# Original LSTM modified to fit the retraining script
 def evaluate_predictions(data, predictions, horizon):
 
     actual = data["y_test"]

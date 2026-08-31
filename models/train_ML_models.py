@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost import XGBRegressor
 
-
+# This the traditional machine learning model training pipeline
 def train_ml_models(X_train, X_test, y_train, y_test):
     models = {
         "Linear Regression": LinearRegression(),

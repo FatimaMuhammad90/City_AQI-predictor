@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import pandas as pd
 import requests
 from supabase import Client, create_client
-
+# This is the monitoring pipeline which monitors the model and stores them in supabase
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -153,11 +153,6 @@ def get_weather(city, start_date, end_date):
     )
 
     return df
-
-
-# ============================================================
-# PENDING PREDICTIONS & DATA STORAGE
-# ============================================================
 
 
 def get_pending_predictions():

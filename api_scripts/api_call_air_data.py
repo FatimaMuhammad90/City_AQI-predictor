@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 from datetime import date, timedelta
-
+# these are the starting scripts to get the data and crete data file
 CITIES = [
     {
         "city": "Islamabad",

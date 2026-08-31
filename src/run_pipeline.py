@@ -2,6 +2,7 @@ import os
 import sys
 import pandas as pd
 
+# This is the Hourly_Aqi_pipeline starting point
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.api_fetch import fetch_all_cities

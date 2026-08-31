@@ -8,16 +8,9 @@ PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))
 )
 
-FEAST_REPO = os.path.join(
-    PROJECT_ROOT,
-    "feast_st"
-)
+FEAST_REPO = os.path.join(PROJECT_ROOT,"feast_st")
 
-FEATURE_FILE = os.path.join(
-    FEAST_REPO,
-    "data",
-    "aqi_features.parquet"
-)
+FEATURE_FILE = os.path.join( FEAST_REPO, "data","aqi_features.parquet")
 def update_feast(features):
     features = features.copy()
 
