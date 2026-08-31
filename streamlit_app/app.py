@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-
+import altair as alt
 from streamlit_pred import (
     get_latest_predictions,
     get_monitoring_data,
@@ -17,12 +17,7 @@ st.set_page_config(
     layout="wide",
 )
 
-CITIES = [
-    "Islamabad",
-    "Lahore",
-    "Peshawar",
-    "Rawalpindi",
-]
+CITIES = ["Islamabad", "Lahore", "Peshawar", "Rawalpindi",]
 
 
 # SESSION STATE
@@ -148,12 +143,32 @@ if st.session_state["predictions"] is not None:
         }
     )
 
-    st.line_chart(
-        chart_data.set_index("Forecast Horizon"),
-        use_container_width=True,
-    )
+    # Smaller chart
+    chart_col, _ = st.columns([2, 1])
 
-    # SHAP
+    with chart_col:
+        chart = (
+            alt.Chart(chart_data)
+            .mark_line(point=True)
+            .encode(
+                x=alt.X(
+                    "Forecast Horizon:N",
+                    title=None,
+                ),
+                y=alt.Y(
+                    "Predicted AQI:Q",
+                    title="AQI",
+                ),
+            )
+            .properties(
+                height=220,
+            )
+        )
+
+        st.altair_chart(
+            chart,
+            use_container_width=True,
+        )
 
     show_shap_analysis(prediction_city)
 
@@ -264,10 +279,14 @@ else:
                     ]
                 ]
 
-                st.line_chart(
-                    chart_df,
-                    height=300,
-                )
+                chart_col, _ = st.columns([2, 1])
+
+                with chart_col:
+                    st.line_chart(
+                        chart_df,
+                        height=200,
+                        use_container_width=True,
+                    )
 
                 st.caption(
                     "Predicted AQI vs Actual AQI vs Previous-hour AQI"
