@@ -110,7 +110,7 @@ if st.session_state["predictions"] is not None:
             hazardous_forecasts.append(f"72h: {aqi_72:.2f}")
 
         if hazardous_forecasts:
-            st.error("🚨 HAZARDOUS")
+            st.error("HAZARDOUS")
 
             st.caption("AQI above 300:")
 
@@ -118,7 +118,7 @@ if st.session_state["predictions"] is not None:
                 st.write(f"**{forecast}**")
 
         else:
-            st.success("✓ NO HAZARD")
+            st.success("NO HAZARD")
             st.caption("All forecasts are below AQI 300.")
 
     st.divider()
