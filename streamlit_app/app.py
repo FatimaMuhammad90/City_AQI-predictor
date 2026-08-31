@@ -131,8 +131,6 @@ if st.session_state["predictions"] is not None:
             get_aqi_status(aqi_72)[0]
         )
 
-    # FORECAST GRAPH
-
     st.subheader("Forecast Trend")
 
     chart_data = pd.DataFrame(
@@ -283,12 +281,9 @@ st.subheader("Hourly Backfill Status")
 total, evaluated, pending = get_hourly_backfill_status()
 
 col1, col2, col3 = st.columns(3)
-
 with col1:
     st.metric("Total Predictions", total)
-
 with col2:
     st.metric("Evaluated", evaluated)
-
 with col3:
     st.metric("Pending", pending)
