@@ -278,8 +278,6 @@ This project is licensed under the MIT License.
 
 Copyright (c) 2026 Fatima Muhummad Ali
 
-See the [LICENSE](LICENSE) file for the full license text.
-
 ## Author
 
 **Fatima Muhummad Ali**
