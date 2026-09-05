@@ -15,9 +15,6 @@ from models.feature_engineering import create_features
 REPO_ID = "flork-18115/AQI_prediciton_models"
 
 
-# ============================================================
-# LOAD MODEL
-# ============================================================
 
 def load_shap_model(target_column):
 
@@ -67,9 +64,9 @@ def load_shap_model(target_column):
         )
 
 
-# ============================================================
+
 # PREPARE DATA
-# ============================================================
+
 
 def prepare_shap_data(historical_df, target_column):
 
@@ -101,39 +98,19 @@ def prepare_shap_data(historical_df, target_column):
 
     return X_test, test_cities
 
-
-# ============================================================
-# CALCULATE SHAP
-# ============================================================
-
 def calculate_shap_results(historical_df, target_column):
 
-    # --------------------------------------------------------
-    # LOAD MODEL
-    # --------------------------------------------------------
 
     model = load_shap_model(target_column)
-
-    # --------------------------------------------------------
-    # PREPARE TEST DATA
-    # --------------------------------------------------------
 
     X_test, test_cities = prepare_shap_data(
         historical_df,
         target_column,
     )
 
-    # --------------------------------------------------------
-    # SHAP
-    # --------------------------------------------------------
-
     explainer = shap.TreeExplainer(model)
 
     shap_values = explainer.shap_values(X_test)
-
-    # --------------------------------------------------------
-    # IMPORTANCE
-    # --------------------------------------------------------
 
     shap_importance = pd.DataFrame(
         {

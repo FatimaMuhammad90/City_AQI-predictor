@@ -263,8 +263,7 @@ def show_shap_analysis(city):
     st.divider()
 
     st.subheader(
-        f"Model Explainability — {city}"
-    )
+        f"Model Explainability — {city}")
 
     horizon = st.radio(
         "Forecast Horizon",

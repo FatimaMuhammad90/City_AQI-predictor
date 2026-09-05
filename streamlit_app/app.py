@@ -278,13 +278,10 @@ else:
             if historical_predictions:
                 pred_df = pd.DataFrame(historical_predictions)
                 pred_df = pred_df.sort_values("target_time")
-                pred_df["lagged_aqi"] = pred_df["actual_aqi"].shift(1)
-
                 chart_df = pred_df.set_index("target_time")[
                     [
                         "predicted_aqi",
-                        "actual_aqi",
-                        "lagged_aqi",
+                        "actual_aqi"
                     ]
                 ]
 
